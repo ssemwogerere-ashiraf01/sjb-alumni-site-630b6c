@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>News — SJB Association</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+<style>
+  .news-header {
+    background: var(--paper);
+    border-bottom: 1px solid var(--border);
+    padding: 2.5rem 2rem;
+    text-align: center;
+  }
+  .news-header h1 { margin: 0 0 0.25rem; font-size: 1.8rem; }
+  .news-header p { color: var(--text-muted); margin: 0; }
+  .news-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:1.5rem; margin-top:2rem; }
+  .news-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+  }
+  .news-card:hover { transform:translateY(-2px); box-shadow:0 18px 30px rgba(14,25,40,0.12); }
+  .news-media {
+    width: 100%; height: 200px; object-fit: cover; background: var(--border);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 2rem;
+  }
+  .news-media-placeholder {
+    width: 100%; height: 200px;
+    background: linear-gradient(135deg, var(--ink-navy), var(--forest));
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.6); font-size: 0.9rem;
+  }
+  .news-body { padding: 1.25rem; flex: 1; display: flex; flex-direction: column; }
+  .news-meta { font-size: 0.8rem; color: var(--text-muted); display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  .news-category { 
+    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px;
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    background: #eaf4ec; color: #1f4b3f; letter-spacing: 0.03em;
+  }
+  .news-card h3 { margin: 0.5rem 0 0.4rem; font-size: 1.15rem; line-height: 1.3; }
+  .news-card .preview { color: var(--text); font-size: 0.88rem; line-height: 1.55; flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .news-card .read-more { margin-top: 0.75rem; }
+  .news-empty { text-align:center; color:var(--text-muted); padding:3rem 0; }
+  .search-bar { max-width:480px; margin: 1rem auto 0; }
+  .search-bar input {
+    width: 100%; padding: 0.7rem 1rem; border: 1px solid var(--border);
+    border-radius: var(--radius); font-family: inherit; font-size: 0.95rem;
+  }
+  /* Modal / detail view */
+  .modal-overlay {
+    position: fixed; inset:0; background:rgba(14,25,40,0.6);
+    display:flex; align-items:center; justify-content:center;
+    z-index:1000; padding:1rem;
+  }
+  .modal-overlay[hidden] { display:none; }
+  .modal-content {
+    background:var(--paper); border-radius:var(--radius);
+    max-width:740px; width:100%; max-height:90vh; overflow-y:auto;
+    box-shadow:0 30px 50px rgba(0,0,0,0.25);
+  }
+  .modal-content .modal-media {
+    width:100%; max-height:380px; object-fit:cover; background:var(--border);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .modal-content .modal-inner { padding:1.75rem; }
+  .modal-content .meta { font-size:0.82rem; color:var(--text-muted); display:flex; gap:0.6rem; align-items:center; margin-bottom:0.5rem; }
+  .modal-content h2 { margin:0 0 0.5rem; }
+  .modal-content .full-content { white-space:pre-wrap; color:var(--text); line-height:1.7; margin-top:1rem; }
+  .modal-close {
+    position: sticky; top:0; float:right;
+    background:none; border:none; font-size:1.6rem; cursor:pointer;
+    color:var(--text-muted); padding:0.5rem 0.75rem; line-height:1;
+  }
+  .modal-close:hover { color:var(--ink-navy); }
+  /* Newsletter */
+  .newsletter-section {
+    max-width: 520px; margin: 2.5rem auto; text-align: center;
+  }
+  .newsletter-section h3 { margin-bottom: 0.25rem; }
+  .newsletter-section p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  .newsletter-form { display: flex; gap: 0.75rem; }
+  .newsletter-form input { flex: 1; padding: 0.7rem 0.9rem; border: 1px solid var(--border); border-radius: var(--radius); font-family: inherit; }
+  @media (max-width: 640px) {
+    .news-grid { grid-template-columns:1fr; }
+    .newsletter-form { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="news-header">
+  <span class="eyebrow">Association</span>
+  <h1>News & Updates</h1>
+  <p>Stay informed with the latest from the SJB Association.</p>
+  <div class="search-bar">
+    <input type="text" id="news-search" placeholder="Search news by title or category..." />
+  </div>
+</div>
+
+<div class="section" style="padding-top:0;">
+  <div id="alert-box"></div>
+  <div id="news-container" class="news-grid">
+    <div class="news-empty">Loading news...</div>
+  </div>
+</div>
+
+<!-- Newsletter Subscription -->
+<div class="section" style="padding-top:0;">
+  <div class="newsletter-section">
+    <h3>📬 Subscribe to our newsletter</h3>
+    <p>Get the latest news, events, and announcements delivered to your inbox.</p>
+    <div id="newsletter-alert"></div>
+    <form id="newsletter-form" class="newsletter-form">
+      <input type="email" id="newsletter-email" placeholder="Enter your email address" required />
+      <button type="submit" class="btn btn-gold" id="newsletter-btn">Subscribe</button>
+    </form>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div id="news-modal" class="modal-overlay" hidden>
+  <div class="modal-content">
+    <button class="modal-close" id="modal-close-btn">&times;</button>
+    <div id="modal-media" class="modal-media"></div>
+    <div class="modal-inner" id="modal-inner"></div>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from './assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+  import { requireLoggedIn } from './assets/js/session-guard.js';
+
+  mountNav('news');
+  mountFooter();
+
+  const session = await requireLoggedIn();
+  if (!session) throw new Error('redirecting');
+
+  let allNews = [];
+  let searchTerm = '';
+
+  const container = document.getElementById('news-container');
+  const alertBox = document.getElementById('alert-box');
+  const modal = document.getElementById('news-modal');
+  const modalMedia = document.getElementById('modal-media');
+  const modalInner = document.getElementById('modal-inner');
+  const searchInput = document.getElementById('news-search');
+
+  await loadNews();
+
+  searchInput.addEventListener('input', () => {
+    searchTerm = searchInput.value.trim().toLowerCase();
+    renderNews();
+  });
+
+  document.getElementById('modal-close-btn').addEventListener('click', () => modal.hidden = true);
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.hidden = true; });
+
+  // Newsletter subscription
+  document.getElementById('newsletter-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('newsletter-btn');
+    const alertEl = document.getElementById('newsletter-alert');
+    const email = document.getElementById('newsletter-email').value.trim();
+
+    btn.disabled = true;
+    btn.textContent = 'Subscribing...';
+
+    const { error } = await supabase.from('subscribers').insert({ email });
+
+    if (error) {
+      if (error.message && error.message.toLowerCase().includes('duplicate')) {
+        alertEl.innerHTML = `<div class="alert alert-success">You're already subscribed! Stay tuned for updates.</div>`;
+      } else {
+        alertEl.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+      }
+    } else {
+      alertEl.innerHTML = `<div class="alert alert-success">Thanks for subscribing! You'll receive updates at ${escapeHtml(email)}.</div>`;
+      document.getElementById('newsletter-form').reset();
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Subscribe';
+  });
+
+  async function loadNews() {
+    // Try with is_active filter first (if the column exists from 009 migration),
+    // fallback to fetching all records ordered by published_at
+    let data, error;
+
+    const result = await supabase
+      .from('news')
+      .select('*')
+      .order('published_at', { ascending: false });
+
+    data = result.data;
+    error = result.error;
+
+    if (error) {
+      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+      container.innerHTML = `<div class="news-empty">Could not load news.</div>`;
+      return;
+    }
+
+    allNews = data || [];
+    renderNews();
+  }
+
+  function renderNews() {
+    const filtered = searchTerm
+      ? allNews.filter(n =>
+          (n.title || '').toLowerCase().includes(searchTerm) ||
+          (n.category || '').toLowerCase().includes(searchTerm)
+        )
+      : allNews;
+
+    if (!filtered.length) {
+      container.innerHTML = `<div class="news-empty">${searchTerm ? 'No news match your search.' : 'No news articles published yet.'}</div>`;
+      return;
+    }
+
+    container.innerHTML = filtered.map(article => {
+      const mediaHtml = renderMediaPreview(article.image_url, article.title);
+      const previewText = (article.content || '').length > 150
+        ? article.content.slice(0, 150) + '…'
+        : article.content || '';
+
+      return `
+        <div class="news-card" data-news-id="${article.id}">
+          ${mediaHtml}
+          <div class="news-body">
+            <div class="news-meta">
+              <span class="news-category">${escapeHtml(article.category || 'General')}</span>
+              <span>${new Date(article.published_at).toLocaleDateString()}</span>
+            </div>
+            <h3>${escapeHtml(article.title)}</h3>
+            <div class="preview">${escapeHtml(previewText)}</div>
+            <button class="btn btn-outline-light read-more" style="background:var(--ink-navy);color:#fff;align-self:flex-start;" data-news-id="${article.id}">Read more</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.read-more, .news-card').forEach(el => {
+      el.addEventListener('click', (e) => {
+        const card = e.target.closest('.news-card');
+        if (!card) return;
+        const id = card.dataset.newsId;
+        const article = allNews.find(n => n.id === id);
+        if (article) openModal(article);
+      });
+    });
+  }
+
+  function openModal(article) {
+    const mediaContent = renderMediaEmbed(article.image_url, article.title);
+    modalMedia.innerHTML = mediaContent;
+    modalInner.innerHTML = `
+      <div class="meta">
+        <span class="news-category">${escapeHtml(article.category || 'General')}</span>
+        <span>${new Date(article.published_at).toLocaleDateString()}</span>
+      </div>
+      <h2>${escapeHtml(article.title)}</h2>
+      <div class="full-content">${escapeHtml(article.content || '')}</div>
+    `;
+    modal.hidden = false;
+  }
+
+  function parseMediaJson(str) {
+    if (!str) return null;
+    try { return typeof str === 'string' ? JSON.parse(str) : str; }
+    catch { return { type: 'image', url: str }; }
+  }
+
+  function renderMediaPreview(raw, title) {
+    const media = parseMediaJson(raw);
+    if (!media || !media.url) {
+      return `<div class="news-media-placeholder"><span>📰 ${escapeHtml(title?.[0]?.toUpperCase() || 'N')}</span></div>`;
+    }
+
+    const type = media.type || 'image';
+    const url = media.url;
+
+    if (type === 'image') {
+      return `<img src="${escapeHtml(url)}" alt="${escapeHtml(title)}" class="news-media" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="news-media-placeholder" style="display:none;"><span>📷 Image unavailable</span></div>`;
+    }
+    if (type === 'video') {
+      return `<div class="news-media" style="background:#000;"><video src="${escapeHtml(url)}" style="width:100%;height:100%;object-fit:cover;" preload="metadata"></video></div>`;
+    }
+    if (type === 'audio') {
+      return `<div class="news-media" style="background:var(--ink-navy);flex-direction:column;gap:0.5rem;"><span style="font-size:3rem;">🎵</span><audio src="${escapeHtml(url)}" controls style="width:80%;max-width:260px;"></audio></div>`;
+    }
+    if (type === 'document') {
+      return `<div class="news-media" style="background:var(--forest);flex-direction:column;gap:0.5rem;"><span style="font-size:3rem;">📄</span><span style="font-size:0.82rem;color:#fff;">Document</span></div>`;
+    }
+    return `<div class="news-media" style="background:var(--gold);flex-direction:column;gap:0.5rem;"><span style="font-size:3rem;">🔗</span><span style="font-size:0.82rem;color:var(--ink-navy);">External link</span></div>`;
+  }
+
+  function renderMediaEmbed(raw, title) {
+    const media = parseMediaJson(raw);
+    if (!media || !media.url) return '';
+
+    const type = media.type || 'image';
+    const url = media.url;
+
+    if (type === 'image') {
+      return `<img src="${escapeHtml(url)}" alt="${escapeHtml(title)}" class="modal-media" />`;
+    }
+    if (type === 'video') {
+      return `<div class="modal-media" style="background:#000;padding:1rem;"><video src="${escapeHtml(url)}" controls style="width:100%;max-height:340px;"></video></div>`;
+    }
+    if (type === 'audio') {
+      return `<div class="modal-media" style="background:var(--ink-navy);flex-direction:column;gap:0.5rem;padding:2rem;"><span style="font-size:3rem;">🎵</span><audio src="${escapeHtml(url)}" controls style="width:80%;max-width:360px;"></audio></div>`;
+    }
+    if (type === 'document') {
+      return `<div class="modal-media" style="background:var(--forest);flex-direction:column;gap:0.5rem;padding:2rem;"><span style="font-size:3rem;">📄</span><a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:#fff;font-weight:700;">Open Document</a></div>`;
+    }
+    return `<div class="modal-media" style="background:var(--gold);flex-direction:column;gap:0.5rem;padding:2rem;"><span style="font-size:3rem;">🔗</span><a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--ink-navy);font-weight:700;">Visit Link</a></div>`;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

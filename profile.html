@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>My Profile — SJB Association</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+<style>
+  .profile-wrap { max-width: 640px; margin: 0 auto; padding: 3rem 2rem; }
+  .profile-card { background:var(--paper); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:2rem; margin-bottom:1.5rem; }
+  .readonly-row { display:flex; justify-content:space-between; padding:0.6rem 0; border-bottom:1px solid var(--border); font-size:0.92rem; }
+  .readonly-row:last-child { border-bottom:none; }
+  .readonly-row span:first-child { color:var(--text-muted); }
+  .readonly-row span:last-child { font-weight:600; color:var(--ink-navy); }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="profile-wrap">
+  <div class="section-head" style="text-align:left;margin:0 0 1.5rem;">
+    <h2 style="margin:0;">My Profile</h2>
+    <p style="color:var(--text-muted);margin:0.4rem 0 0;">You can update your own contact details below. Membership status, fee, and role can only be changed by an admin.</p>
+  </div>
+
+  <div class="profile-card">
+    <h3 style="margin-top:0;">Membership status</h3>
+    <div class="readonly-row"><span>Email</span><span id="ro-email"></span></div>
+    <div class="readonly-row"><span>Membership type</span><span id="ro-class"></span></div>
+    <div class="readonly-row"><span>Account status</span><span id="ro-status"></span></div>
+    <div class="readonly-row"><span>Membership fee</span><span id="ro-fee"></span></div>
+  </div>
+
+  <div class="profile-card">
+    <h3 style="margin-top:0;">Edit my details</h3>
+    <div id="alert-box"></div>
+    <form id="profile-form">
+      <div class="form-group"><label for="full_name">Full name</label><input type="text" id="full_name" required /></div>
+      <div class="form-group"><label for="phone">Phone number</label><input type="text" id="phone" /></div>
+      <div class="form-group"><label for="profession">Profession</label><input type="text" id="profession" /></div>
+      <div class="form-group"><label for="location">Location</label><input type="text" id="location" /></div>
+      <div class="form-group" id="grad-group"><label for="graduation_year">Graduation year</label><input type="number" id="graduation_year" min="1970" max="2030" /></div>
+      <div class="form-group">
+        <label for="avatar_file">Profile photo</label>
+        <div style="display:flex;align-items:center;gap:1rem;">
+          <img id="avatar-preview" src="" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;background:var(--border);display:none;" />
+          <span id="avatar-fallback" style="width:64px;height:64px;border-radius:50%;background:var(--gold);color:var(--ink-navy);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:'Fraunces',serif;"></span>
+          <input type="file" id="avatar_file" accept="image/png,image/jpeg,image/webp" style="flex:1;" />
+        </div>
+        <small style="color:var(--text-muted);">JPG, PNG or WEBP, up to 2MB.</small>
+      </div>
+      <button type="submit" class="btn btn-gold btn-block" id="save-btn">Save Changes</button>
+    </form>
+  </div>
+
+  <div class="profile-card">
+    <h3 style="margin-top:0;">Change password</h3>
+    <div id="pw-alert-box"></div>
+    <form id="password-form">
+      <div class="form-group"><label for="new_password">New password</label><input type="password" id="new_password" minlength="8" required /></div>
+      <div class="form-group"><label for="confirm_password">Confirm new password</label><input type="password" id="confirm_password" minlength="8" required /></div>
+      <button type="submit" class="btn btn-outline-light btn-block" style="background:var(--ink-navy);color:#fff;" id="pw-btn">Update Password</button>
+    </form>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from './assets/js/supabase-client.js';
+  import { requireApprovedMember } from './assets/js/session-guard.js';
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+
+  mountNav('profile');
+  mountFooter();
+
+  const profile = await requireApprovedMember();
+  if (!profile) throw new Error('redirecting');
+
+  document.getElementById('ro-email').textContent = profile.email;
+  document.getElementById('ro-class').textContent = profile.membership_class === 'alumni' ? 'Alumni' : 'Non-Alumni';
+  document.getElementById('ro-status').textContent = profile.status;
+  document.getElementById('ro-fee').textContent = profile.membership_fee_paid ? 'Paid ✓' : 'Not paid';
+
+  document.getElementById('full_name').value = profile.full_name || '';
+  document.getElementById('phone').value = profile.phone || '';
+  document.getElementById('profession').value = profile.profession || '';
+  document.getElementById('location').value = profile.location || '';
+  document.getElementById('graduation_year').value = profile.graduation_year || '';
+  document.getElementById('grad-group').style.display = profile.membership_class === 'alumni' ? 'block' : 'none';
+
+  renderAvatar(profile.profile_photo_url, profile.full_name);
+
+  function renderAvatar(url, name) {
+    const img = document.getElementById('avatar-preview');
+    const fallback = document.getElementById('avatar-fallback');
+    if (url) {
+      img.src = url; img.style.display = 'block'; fallback.style.display = 'none';
+    } else {
+      img.style.display = 'none'; fallback.style.display = 'flex';
+      fallback.textContent = (name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
+    }
+  }
+
+  document.getElementById('avatar_file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const alertBox = document.getElementById('alert-box');
+
+    if (file.size > 2 * 1024 * 1024) {
+      alertBox.innerHTML = `<div class="alert alert-error">That image is larger than 2MB — please choose a smaller file.</div>`;
+      e.target.value = '';
+      return;
+    }
+
+    alertBox.innerHTML = `<div class="alert alert-success">Uploading photo...</div>`;
+    const ext = file.name.split('.').pop();
+    const path = `${profile.id}/avatar.${ext}`;
+
+    // upsert:true so re-uploading just replaces the previous photo at the
+    // same path, instead of erroring or accumulating old files forever.
+    const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, cacheControl: '3600' });
+    if (uploadErr) {
+      alertBox.innerHTML = `<div class="alert alert-error">Upload failed: ${uploadErr.message}</div>`;
+      return;
+    }
+
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    // Cache-bust so the browser doesn't keep showing the old cached image
+    // at the same URL after a re-upload.
+    const freshUrl = `${pub.publicUrl}?t=${Date.now()}`;
+
+    const { error: dbErr } = await supabase.from('profiles').update({ profile_photo_url: freshUrl }).eq('id', profile.id);
+    if (dbErr) {
+      alertBox.innerHTML = `<div class="alert alert-error">${dbErr.message}</div>`;
+      return;
+    }
+
+    renderAvatar(freshUrl, profile.full_name);
+    alertBox.innerHTML = `<div class="alert alert-success">Profile photo updated.</div>`;
+  });
+
+  document.getElementById('profile-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true; btn.textContent = 'Saving...';
+    const alertBox = document.getElementById('alert-box');
+
+    // Only non-sensitive fields — role/status/fee are excluded from this
+    // update entirely, and the DB trigger would reject them anyway.
+    const { error } = await supabase.from('profiles').update({
+      full_name: document.getElementById('full_name').value.trim(),
+      phone: document.getElementById('phone').value.trim() || null,
+      profession: document.getElementById('profession').value.trim() || null,
+      location: document.getElementById('location').value.trim() || null,
+      graduation_year: document.getElementById('graduation_year').value || null,
+    }).eq('id', profile.id);
+
+    if (error) {
+      alertBox.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+    } else {
+      alertBox.innerHTML = `<div class="alert alert-success">Profile updated.</div>`;
+    }
+    btn.disabled = false; btn.textContent = 'Save Changes';
+  });
+
+  document.getElementById('password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('pw-btn');
+    const alertBox = document.getElementById('pw-alert-box');
+    const pw = document.getElementById('new_password').value;
+    const confirm = document.getElementById('confirm_password').value;
+
+    if (pw !== confirm) {
+      alertBox.innerHTML = `<div class="alert alert-error">Passwords do not match.</div>`;
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'Updating...';
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    if (error) {
+      alertBox.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+    } else {
+      alertBox.innerHTML = `<div class="alert alert-success">Password updated.</div>`;
+      document.getElementById('password-form').reset();
+    }
+    btn.disabled = false; btn.textContent = 'Update Password';
+  });
+</script>
+</body>
+</html>

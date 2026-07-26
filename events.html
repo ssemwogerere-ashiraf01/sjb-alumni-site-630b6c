@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Events — SJB Association</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+<style>
+  .page-header {
+    background: var(--paper);
+    border-bottom: 1px solid var(--border);
+    padding: 2.5rem 2rem;
+    text-align: center;
+  }
+  .page-header h1 { margin: 0 0 0.25rem; font-size: 1.8rem; }
+  .page-header p { color: var(--text-muted); margin: 0; }
+  .events-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:1.5rem; margin-top:2rem; }
+  .event-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+  }
+  .event-date-badge {
+    background: var(--ink-navy);
+    color: #fff;
+    padding: 1rem;
+    text-align: center;
+    font-family: 'Fraunces', Georgia, serif;
+  }
+  .event-date-badge .month { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+  .event-date-badge .day { font-size: 2rem; font-weight: 700; line-height: 1; margin: 0.25rem 0; }
+  .event-body { padding: 1.25rem; flex: 1; display: flex; flex-direction: column; }
+  .event-body h3 { margin: 0 0 0.4rem; font-size: 1.15rem; }
+  .event-meta { font-size: 0.82rem; color: var(--text-muted); display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+  .event-desc { color: var(--text); font-size: 0.88rem; line-height: 1.55; flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .event-footer { padding: 1rem 1.25rem; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .event-register-btn { font-size: 0.85rem; }
+  .events-empty { text-align:center; color:var(--text-muted); padding:3rem 0; }
+  .register-modal-overlay {
+    position: fixed; inset:0; background:rgba(14,25,40,0.6);
+    display:flex; align-items:center; justify-content:center;
+    z-index:1000; padding:1rem;
+  }
+  .register-modal-overlay[hidden] { display:none; }
+  .register-modal-content {
+    background:var(--paper); border-radius:var(--radius);
+    max-width:480px; width:100%; padding:2rem;
+    box-shadow:0 30px 50px rgba(0,0,0,0.25);
+  }
+  .register-modal-content h3 { margin-top: 0; }
+  .register-modal-content p { color: var(--text-muted); font-size: 0.9rem; }
+  @media (max-width: 640px) { .events-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="page-header">
+  <span class="eyebrow">Association</span>
+  <h1>Upcoming Events</h1>
+  <p>Stay connected — attend events, meet fellow members, and participate in association activities.</p>
+</div>
+
+<div class="section" style="padding-top:0;">
+  <div id="alert-box"></div>
+  <div id="events-container" class="events-grid">
+    <div class="events-empty">Loading events...</div>
+  </div>
+</div>
+
+<!-- Registration Modal -->
+<div id="register-modal" class="register-modal-overlay" hidden>
+  <div class="register-modal-content">
+    <h3 id="reg-modal-title">Register for Event</h3>
+    <p id="reg-modal-desc">Confirm your attendance for this event.</p>
+    <div id="reg-modal-alert"></div>
+    <form id="reg-modal-form">
+      <button type="submit" class="btn btn-gold btn-block" id="reg-modal-btn">Confirm Registration</button>
+      <button type="button" class="btn btn-outline-light btn-block" style="margin-top:0.5rem;background:var(--ink-navy);color:#fff;" id="reg-modal-cancel">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from './assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+  import { requireLoggedIn } from './assets/js/session-guard.js';
+
+  mountNav('events');
+  mountFooter();
+
+  const session = await requireLoggedIn();
+  if (!session) throw new Error('redirecting');
+
+  const { data: profile } = await supabase.from('profiles').select('id, full_name').eq('id', session.user.id).single();
+
+  const container = document.getElementById('events-container');
+  const alertBox = document.getElementById('alert-box');
+  const regModal = document.getElementById('register-modal');
+  const regForm = document.getElementById('reg-modal-form');
+  const regBtn = document.getElementById('reg-modal-btn');
+  const regAlert = document.getElementById('reg-modal-alert');
+  const regTitle = document.getElementById('reg-modal-title');
+  const regDesc = document.getElementById('reg-modal-desc');
+
+  let events = [];
+  let selectedEventId = null;
+
+  await loadEvents();
+
+  document.getElementById('reg-modal-cancel').addEventListener('click', () => { regModal.hidden = true; });
+  regModal.addEventListener('click', (e) => { if (e.target === regModal) regModal.hidden = true; });
+
+  regForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!selectedEventId || !profile) return;
+
+    regBtn.disabled = true;
+    regBtn.textContent = 'Registering...';
+    regAlert.innerHTML = '';
+
+    const { error } = await supabase.from('event_registrations').insert({
+      event_id: selectedEventId,
+      user_id: profile.id,
+    });
+
+    if (error) {
+      if (error.code === '23505') {
+        regAlert.innerHTML = `<div class="alert alert-success">You're already registered for this event!</div>`;
+      } else {
+        regAlert.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+      }
+    } else {
+      regAlert.innerHTML = `<div class="alert alert-success">You're registered! We'll see you there.</div>`;
+      regForm.reset();
+    }
+
+    regBtn.disabled = false;
+    regBtn.textContent = 'Confirm Registration';
+  });
+
+  async function loadEvents() {
+    const { data, error } = await supabase
+      .from('events')
+      .select('*')
+      .gte('event_date', new Date().toISOString())
+      .order('event_date', { ascending: true });
+
+    if (error) {
+      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+      container.innerHTML = `<div class="events-empty">Could not load events.</div>`;
+      return;
+    }
+
+    events = data || [];
+    renderEvents();
+  }
+
+  function renderEvents() {
+    if (!events.length) {
+      container.innerHTML = `<div class="events-empty">No upcoming events scheduled. Check back later!</div>`;
+      return;
+    }
+
+    container.innerHTML = events.map(event => {
+      const date = new Date(event.event_date);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const month = months[date.getMonth()];
+      const day = date.getDate();
+      const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const descPreview = (event.description || '').length > 120
+        ? event.description.slice(0, 120) + '…'
+        : event.description || '';
+
+      return `
+        <div class="event-card" data-event-id="${event.id}">
+          <div class="event-date-badge">
+            <div class="month">${month}</div>
+            <div class="day">${day}</div>
+            <div style="font-size:0.8rem;margin-top:0.3rem;">${time}</div>
+          </div>
+          <div class="event-body">
+            <h3>${escapeHtml(event.title)}</h3>
+            <div class="event-meta">
+              ${event.location ? `<span>📍 ${escapeHtml(event.location)}</span>` : ''}
+              ${event.max_attendees ? `<span>👥 ${escapeHtml(String(event.max_attendees))} max</span>` : ''}
+            </div>
+            ${descPreview ? `<div class="event-desc">${escapeHtml(descPreview)}</div>` : ''}
+          </div>
+          <div class="event-footer">
+            <span style="font-size:0.82rem;color:var(--text-muted);">${event.max_attendees ? `${event.max_attendees} spots` : 'Open'}</span>
+            <button type="button" class="btn btn-gold event-register-btn" data-event-id="${event.id}">Register</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.event-register-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.eventId;
+        const event = events.find(e => e.id === id);
+        if (!event) return;
+        selectedEventId = id;
+        regTitle.textContent = `Register: ${escapeHtml(event.title)}`;
+        regDesc.textContent = `Confirm your attendance for "${escapeHtml(event.title)}" on ${new Date(event.event_date).toLocaleDateString()}.`;
+        regAlert.innerHTML = '';
+        regModal.hidden = false;
+      });
+    });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>
+

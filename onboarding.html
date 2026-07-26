@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Complete Your Profile — SJB Association</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="auth-wrap">
+  <div class="auth-card" style="max-width:480px;">
+    <h2>Welcome! Let's finish setting up your account</h2>
+    <p class="subtitle">Just a few details so admins and fellow members know a bit about you. This only takes a minute.</p>
+
+    <div id="alert-box"></div>
+
+    <form id="onboarding-form">
+      <div class="form-group">
+        <label>Profile photo</label>
+        <div style="display:flex;align-items:center;gap:1rem;">
+          <img id="avatar-preview" src="" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;background:var(--border);display:none;" />
+          <span id="avatar-fallback" style="width:64px;height:64px;border-radius:50%;background:var(--gold);color:var(--ink-navy);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:'Fraunces',serif;"></span>
+          <input type="file" id="avatar_file" accept="image/png,image/jpeg,image/webp" style="flex:1;" />
+        </div>
+        <small style="color:var(--text-muted);">Optional — JPG, PNG or WEBP, up to 2MB. You can also add this later from My Profile.</small>
+      </div>
+
+      <div class="form-group">
+        <label for="membership_class">Are you an alumnus/alumna?</label>
+        <select id="membership_class" required>
+          <option value="">Select one...</option>
+          <option value="alumni">Yes — I am an alumnus/alumna (UGX 3,000 membership fee)</option>
+          <option value="non_alumni">No — I am a non-alumni member (UGX 15,000 membership fee)</option>
+        </select>
+      </div>
+      <div class="form-group" id="grad-year-group" style="display:none;">
+        <label for="graduation_year">Graduation year</label>
+        <input type="number" id="graduation_year" min="1970" max="2030" />
+      </div>
+      <div class="form-group">
+        <label for="phone">Phone number</label>
+        <input type="text" id="phone" required placeholder="e.g. 07XXXXXXXX" />
+      </div>
+      <div class="form-group">
+        <label for="profession">Profession</label>
+        <input type="text" id="profession" placeholder="e.g. Accountant, Teacher, Engineer" />
+      </div>
+      <div class="form-group">
+        <label for="location">Location</label>
+        <input type="text" id="location" placeholder="e.g. Kampala, Uganda" />
+      </div>
+
+      <button type="submit" class="btn btn-gold btn-block" id="submit-btn">Continue</button>
+    </form>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from './assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+  import { routeAfterLogin } from './assets/js/auth.js';
+
+  mountNav();
+  mountFooter();
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) { window.location.href = 'login.html'; throw new Error('no session'); }
+
+  const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+  if (profile?.onboarding_completed) {
+    // Already done this before — send them wherever they actually belong now.
+    await routeAfterLogin();
+    throw new Error('already onboarded');
+  }
+
+  document.getElementById('phone').value = profile?.phone || '';
+  document.getElementById('profession').value = profile?.profession || '';
+  document.getElementById('location').value = profile?.location || '';
+  renderAvatar(profile?.profile_photo_url, profile?.full_name);
+
+  document.getElementById('membership_class').addEventListener('change', (e) => {
+    document.getElementById('grad-year-group').style.display = e.target.value === 'alumni' ? 'block' : 'none';
+  });
+
+  let uploadedPhotoUrl = profile?.profile_photo_url || null;
+
+  document.getElementById('avatar_file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const alertBox = document.getElementById('alert-box');
+
+    if (file.size > 2 * 1024 * 1024) {
+      alertBox.innerHTML = `<div class="alert alert-error">That image is larger than 2MB — please choose a smaller file.</div>`;
+      e.target.value = '';
+      return;
+    }
+
+    const ext = file.name.split('.').pop();
+    const path = `${session.user.id}/avatar.${ext}`;
+    const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, cacheControl: '3600' });
+    if (uploadErr) {
+      alertBox.innerHTML = `<div class="alert alert-error">Photo upload failed: ${uploadErr.message}</div>`;
+      return;
+    }
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    uploadedPhotoUrl = `${pub.publicUrl}?t=${Date.now()}`;
+    renderAvatar(uploadedPhotoUrl, profile?.full_name);
+  });
+
+  function renderAvatar(url, name) {
+    const img = document.getElementById('avatar-preview');
+    const fallback = document.getElementById('avatar-fallback');
+    if (url) {
+      img.src = url; img.style.display = 'block'; fallback.style.display = 'none';
+    } else {
+      img.style.display = 'none'; fallback.style.display = 'flex';
+      fallback.textContent = (name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
+    }
+  }
+
+  document.getElementById('onboarding-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('submit-btn');
+    const alertBox = document.getElementById('alert-box');
+    btn.disabled = true; btn.textContent = 'Saving...';
+
+    const membershipClass = document.getElementById('membership_class').value;
+    if (!membershipClass) {
+      alertBox.innerHTML = `<div class="alert alert-error">Please select whether you're an alumnus/alumna.</div>`;
+      btn.disabled = false; btn.textContent = 'Continue';
+      return;
+    }
+
+    const { error } = await supabase.from('profiles').update({
+      membership_class: membershipClass,
+      graduation_year: membershipClass === 'alumni' ? (document.getElementById('graduation_year').value || null) : null,
+      phone: document.getElementById('phone').value.trim(),
+      profession: document.getElementById('profession').value.trim() || null,
+      location: document.getElementById('location').value.trim() || null,
+      profile_photo_url: uploadedPhotoUrl,
+      onboarding_completed: true,
+    }).eq('id', session.user.id);
+
+    if (error) {
+      alertBox.innerHTML = `<div class="alert alert-error">${String(error.message || error)}</div>`;
+      btn.disabled = false; btn.textContent = 'Continue';
+      return;
+    }
+
+    await routeAfterLogin();
+  });
+</script>
+</body>
+</html>

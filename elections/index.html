@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Elections — SJB Association</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+<style>
+  .pill { display:inline-block; padding:0.2rem 0.65rem; border-radius:20px; font-size:0.75rem; font-weight:700; text-transform:uppercase; }
+  .pill-active { background:#eaf4ec; color:#1f4b3f; }
+  .pill-upcoming { background:#fdf3e0; color:#8a6100; }
+  .pill-closed { background:#e9edf3; color:#4a5568; }
+  .pill-draft { background:#f0f0f0; color:#777; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="section">
+  <div class="section-head">
+    <span class="eyebrow">Elections</span>
+    <h2>Leadership elections</h2>
+    <p style="color:var(--text-muted);">Vote for your executive committee. Every member gets exactly one vote per position, and results are only published once voting closes.</p>
+  </div>
+  <div id="alert-box"></div>
+  <div class="card-grid" id="elections-grid"></div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { requireApprovedMember } from '../assets/js/session-guard.js';
+
+  mountNav('elections');
+  mountFooter();
+
+  const profile = await requireApprovedMember();
+  if (!profile) throw new Error('redirecting');
+
+  const grid = document.getElementById('elections-grid');
+
+  await loadAndRenderElections();
+  // Re-check the database every 20 seconds so a status/date change an admin
+  // makes elsewhere shows up here without the member needing to refresh.
+  setInterval(loadAndRenderElections, 20000);
+
+  async function loadAndRenderElections() {
+    const { data: elections, error } = await supabase.from('elections').select('*').order('start_date', { ascending: false });
+    if (error) { document.getElementById('alert-box').innerHTML = `<div class="alert alert-error">${error.message}</div>`; return; }
+
+    if (!elections || elections.length === 0) {
+      grid.innerHTML = `<p style="text-align:center;color:var(--text-muted);grid-column:1/-1;">No elections have been scheduled yet.</p>`;
+      return;
+    }
+
+    const now = new Date();
+    grid.innerHTML = (await Promise.all(elections.map(async (e) => {
+      const start = new Date(e.start_date), end = new Date(e.end_date);
+      const isVotingWindow = e.status === 'active' && now >= start && now <= end;
+
+      const { count: votedCount } = await supabase.from('votes').select('*', { count: 'exact', head: true }).eq('election_id', e.id).eq('voter_id', profile.id);
+
+      let actionHtml = '';
+      let stateNote = '';
+      if (isVotingWindow) {
+        actionHtml = votedCount > 0
+          ? `<a href="results.html?election=${e.id}" class="btn btn-outline-light" style="background:var(--forest);color:#fff;">You've Voted — View Status</a>`
+          : `<a href="vote.html?election=${e.id}" class="btn btn-gold">Cast Your Vote</a>`;
+        stateNote = `<p class="countdown" data-target="${e.end_date}" data-mode="ends" style="font-size:0.8rem;color:var(--forest);font-weight:600;margin:0.3rem 0 0;"></p>`;
+      } else if (e.status === 'closed') {
+        actionHtml = `<a href="results.html?election=${e.id}" class="btn btn-outline-light" style="background:var(--ink-navy);color:#fff;">View Results</a>`;
+      } else if (now < start) {
+        actionHtml = `<button class="btn btn-outline-light" style="background:var(--border);color:var(--text-muted);" disabled>Opens Soon</button>`;
+        stateNote = `<p class="countdown" data-target="${e.start_date}" data-mode="starts" style="font-size:0.85rem;color:var(--forest);font-weight:600;margin:0.3rem 0 0;"></p>`;
+      } else {
+        // now > end, but an admin hasn't flipped the status to 'closed' yet
+        stateNote = `<p style="font-size:0.8rem;color:#9c2b2b;margin:0.3rem 0 0;">Voting window has ended — awaiting admin to close and publish results.</p>`;
+        actionHtml = `<button class="btn btn-outline-light" style="background:var(--border);color:var(--text-muted);" disabled>Voting Ended</button>`;
+      }
+
+      return `<div class="card">
+        <span class="pill pill-${e.status}">${e.status}</span>
+        <h3 style="margin:0.6rem 0 0.3rem;">${escapeHtml(e.title)}</h3>
+        <p>${escapeHtml(e.description || '')}</p>
+        <p style="font-size:0.82rem;color:var(--text-muted);">${start.toLocaleDateString()} – ${end.toLocaleDateString()}</p>
+        ${stateNote}
+        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
+          <a href="candidates.html?election=${e.id}" class="btn btn-outline-light" style="background:var(--forest);color:#fff;">Candidates</a>
+          ${actionHtml}
+        </div>
+      </div>`;
+    }))).join('');
+  }
+
+  startCountdowns();
+  function startCountdowns() {
+    updateCountdowns();
+    setInterval(updateCountdowns, 1000);
+  }
+  function updateCountdowns() {
+    document.querySelectorAll('.countdown').forEach(el => {
+      const target = new Date(el.dataset.target);
+      const diff = target - new Date();
+      const mode = el.dataset.mode;
+      if (diff <= 0) {
+        // Time boundary crossed while the page was open — re-fetch and
+        // re-render in place instead of a jarring full page reload.
+        loadAndRenderElections();
+        return;
+      }
+      const label = mode === 'starts' ? 'Voting starts in' : 'Voting closes in';
+      el.textContent = `${label} ${formatDuration(diff)}`;
+    });
+  }
+  function formatDuration(ms) {
+    let totalSeconds = Math.floor(ms / 1000);
+    const days = Math.floor(totalSeconds / 86400); totalSeconds -= days * 86400;
+    const hours = Math.floor(totalSeconds / 3600); totalSeconds -= hours * 3600;
+    const minutes = Math.floor(totalSeconds / 60); totalSeconds -= minutes * 60;
+    const seconds = totalSeconds;
+    const parts = [];
+    if (days) parts.push(`${days}d`);
+    if (days || hours) parts.push(`${hours}h`);
+    if (days || hours || minutes) parts.push(`${minutes}m`);
+    parts.push(`${seconds}s`);
+    return parts.join(' ');
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

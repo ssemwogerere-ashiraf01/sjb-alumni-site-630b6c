@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Dashboard — SJB Association</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+<style>
+  .welcome-bar {
+    background: var(--paper); border-bottom: 1px solid var(--border);
+    padding: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+  }
+  .welcome-bar h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  .badge { display:inline-block; padding:0.25rem 0.7rem; border-radius:20px; font-size:0.78rem; font-weight:600; }
+  .badge-alumni { background:#eaf0fd; color:#2a4d9c; }
+  .badge-non-alumni { background:#fdf3e0; color:#8a6100; }
+  .quick-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1.25rem; }
+  .quick-card { background:var(--paper); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:0.6rem; }
+  a.quick-card { text-decoration:none; color:inherit; transition:transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
+  a.quick-card:hover { transform:translateY(-2px); box-shadow:0 18px 30px rgba(14, 25, 40, 0.12); border-color:#c8b67a; }
+  a.quick-card:focus-visible { outline:3px solid rgba(196, 160, 74, 0.35); outline-offset:3px; }
+  .quick-card .icon { width:40px; height:40px; border-radius:50%; background:var(--forest); color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; font-weight:700; }
+  .soon-tag { font-size:0.72rem; background:var(--border); color:var(--text-muted); padding:0.15rem 0.5rem; border-radius:12px; align-self:flex-start; }
+  .soon-tag-live { background:#eaf4ec; color:#1f4b3f; border:1px solid #b9d8c0; font-weight:700; }
+  .list-item { padding:0.85rem 0; border-bottom:1px solid var(--border); }
+  .list-item:last-child { border-bottom:none; }
+  .list-item .meta { font-size:0.8rem; color:var(--text-muted); }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="welcome-bar">
+  <div>
+    <h1 id="welcome-name">Welcome back</h1>
+    <span class="badge" id="class-badge"></span>
+  </div>
+  <div id="fee-status"></div>
+</div>
+
+<div class="section">
+  <div class="section-head" style="text-align:left;margin-left:0;">
+    <span class="eyebrow">Quick access</span>
+    <h2 style="margin:0;">What would you like to do?</h2>
+  </div>
+
+  <div class="quick-grid">
+    <div class="quick-card">
+      <div class="icon">S</div>
+      <h3 style="margin:0;">Savings</h3>
+      <p style="color:var(--text-muted);margin:0;font-size:0.92rem;">Contribute, track your balance, or join a group.</p>
+      <a href="savings/register.html" class="btn btn-gold" id="savings-link">Open Savings</a>
+    </div>
+
+    <a class="quick-card" href="elections/index.html" aria-label="Open elections">
+      <div class="icon">E</div>
+      <h3 style="margin:0;">Elections</h3>
+      <p style="color:var(--text-muted);margin:0;font-size:0.92rem;">Vote for your executive committee.</p>
+      <span class="soon-tag" id="elections-status-tag">Coming soon</span>
+    </a>
+
+    <a class="quick-card" href="forum/index.html" aria-label="Open forum">
+      <div class="icon">F</div>
+      <h3 style="margin:0;">Forum</h3>
+      <p style="color:var(--text-muted);margin:0;font-size:0.92rem;">Read posts, reply to members, and share ideas.</p>
+      <span class="soon-tag" style="background:#eaf4ec;color:#1f4b3f;border:1px solid #b9d8c0;">Open discussions</span>
+    </a>
+
+    <div class="quick-card">
+      <div class="icon">P</div>
+      <h3 style="margin:0;">My Profile</h3>
+      <p style="color:var(--text-muted);margin:0;font-size:0.92rem;">Update your contact details or change your password.</p>
+      <a href="profile.html" class="btn btn-outline-light" style="background:var(--forest);color:#fff;">Edit Profile</a>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding-top:0;">
+  <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
+    <div class="card">
+      <h3>Upcoming Events</h3>
+      <div id="events-list"><p style="color:var(--text-muted);font-size:0.9rem;">Loading...</p></div>
+    </div>
+    <div class="card">
+      <h3>Latest News</h3>
+      <div id="news-list"><p style="color:var(--text-muted);font-size:0.9rem;">Loading...</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding-top:0;">
+  <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
+    <div class="card">
+      <h3>Latest Jobs</h3>
+      <div id="jobs-list"><p style="color:var(--text-muted);font-size:0.9rem;">Loading...</p></div>
+    </div>
+    <div class="card">
+      <h3>Forum Highlights</h3>
+      <div id="forum-list"><p style="color:var(--text-muted);font-size:0.9rem;">Loading...</p></div>
+    </div>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from './assets/js/supabase-client.js';
+  import { requireApprovedMember } from './assets/js/session-guard.js';
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+
+  mountNav('dashboard');
+  mountFooter();
+
+  const profile = await requireApprovedMember();
+  if (!profile) throw new Error('redirecting');
+
+  document.getElementById('welcome-name').textContent = `Welcome back, ${profile.full_name?.split(' ')[0] || 'member'}`;
+  const badge = document.getElementById('class-badge');
+  badge.textContent = profile.membership_class === 'alumni' ? 'Alumni Member' : 'Non-Alumni Member';
+  badge.classList.add(profile.membership_class === 'alumni' ? 'badge-alumni' : 'badge-non-alumni');
+
+  document.getElementById('fee-status').innerHTML = profile.membership_fee_paid
+    ? `<span class="badge" style="background:#eaf4ec;color:#1f4b3f;">Membership fee paid ✓</span>`
+    : `<a href="membership-payment.html" class="btn btn-gold">Complete Membership Fee</a>`;
+
+  // Check savings membership to route the Savings card sensibly
+  const { data: activeGroups } = await supabase.from('savings_group_members').select('group_id').eq('user_id', profile.id).eq('status', 'active').limit(1);
+  if (activeGroups && activeGroups.length > 0) {
+    document.getElementById('savings-link').href = 'savings/dashboard.html';
+    document.getElementById('savings-link').textContent = 'View My Savings';
+  }
+
+  // Surface live elections on the dashboard when voting is open.
+  const { data: elections } = await supabase
+    .from('elections')
+    .select('id, status, start_date, end_date')
+    .eq('status', 'active')
+    .order('start_date', { ascending: false })
+    .limit(1);
+
+  const activeElection = elections?.find((election) => {
+    const now = new Date();
+    return now >= new Date(election.start_date) && now <= new Date(election.end_date);
+  });
+
+  const electionsTag = document.getElementById('elections-status-tag');
+  if (activeElection) {
+    electionsTag.textContent = 'LIVE!! Open to Vote!!';
+    electionsTag.classList.add('soon-tag-live');
+  }
+
+  // Upcoming events
+  const { data: events } = await supabase.from('events').select('title, event_date, location, is_active').eq('is_active', true).gte('event_date', new Date().toISOString()).order('event_date').limit(4);
+  document.getElementById('events-list').innerHTML = (events && events.length)
+    ? events.map(e => `<div class="list-item"><strong>${escapeHtml(e.title)}</strong><div class="meta">${new Date(e.event_date).toLocaleDateString()} ${e.location ? '· ' + escapeHtml(e.location) : ''}</div></div>`).join('')
+    : `<p style="color:var(--text-muted);font-size:0.9rem;">No upcoming events right now.</p>`;
+
+  // Latest news
+  const { data: news } = await supabase.from('news').select('title, published_at, is_active').eq('is_active', true).order('published_at', { ascending: false }).limit(4);
+  document.getElementById('news-list').innerHTML = (news && news.length)
+    ? news.map(n => `<div class="list-item"><strong>${escapeHtml(n.title)}</strong><div class="meta">${new Date(n.published_at).toLocaleDateString()}</div></div>`).join('') + `<p style="margin:0.75rem 0 0;"><a href="news.html" style="font-weight:700;">View all news &rarr;</a></p>`
+    : `<p style="color:var(--text-muted);font-size:0.9rem;">No news posted yet.</p>`;
+
+  // Latest jobs
+  const { data: jobs } = await supabase.from('jobs').select('title, company, location, posted_at, is_active, job_type').eq('is_active', true).order('posted_at', { ascending: false }).limit(4);
+  document.getElementById('jobs-list').innerHTML = (jobs && jobs.length)
+    ? jobs.map(job => `<div class="list-item"><strong>${escapeHtml(job.title)}</strong><div class="meta">${escapeHtml(job.company || 'SJB Association')} ${job.location ? '· ' + escapeHtml(job.location) : ''} ${job.job_type ? '· ' + escapeHtml(job.job_type) : ''}</div></div>`).join('')
+    : `<p style="color:var(--text-muted);font-size:0.9rem;">No active jobs posted right now.</p>`;
+
+  // Forum highlights
+  const { data: topics } = await supabase.from('forum_topics').select('title, category, created_at, is_active').eq('is_active', true).order('created_at', { ascending: false }).limit(4);
+  document.getElementById('forum-list').innerHTML = (topics && topics.length)
+    ? topics.map(topic => `<div class="list-item"><strong>${escapeHtml(topic.title)}</strong><div class="meta">${escapeHtml(topic.category || 'General')} · ${new Date(topic.created_at).toLocaleDateString()}</div></div>`).join('')
+    : `<p style="color:var(--text-muted);font-size:0.9rem;">No active forum topics yet.</p>`;
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

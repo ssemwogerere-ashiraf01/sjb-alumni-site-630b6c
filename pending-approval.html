@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Pending Approval — SJB Association</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+<div id="app-nav"></div>
+<div class="auth-wrap">
+  <div class="auth-card" style="text-align:center;">
+    <h2>Your application is under review</h2>
+    <p class="subtitle">An admin needs to approve your account before you can access member features. You'll be able to sign in as soon as that happens — no need to re-apply.</p>
+    <a href="login.html" class="btn btn-outline-light" style="background:var(--forest);color:#fff;">Back to Sign In</a>
+  </div>
+</div>
+<div id="app-footer"></div>
+<script type="module">
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+  import { supabase } from './assets/js/supabase-client.js';
+  await mountNav();
+  mountFooter();
+  // Sign the person out of this half-authenticated state so they don't
+  // sit on a pending session indefinitely.
+  await supabase.auth.signOut();
+</script>
+</body>
+</html>

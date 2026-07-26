@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Leadership — SJB Association</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+<style>
+  .leader-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1.5rem; }
+
+  .leader-card {
+    background:var(--paper); border:1px solid var(--border); border-radius:var(--radius);
+    padding:1.75rem; box-shadow:var(--shadow); text-align:center;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .leader-card .avatar-wrap {
+    width:72px; height:72px; border-radius:50%; overflow:hidden;
+    background:var(--parchment); border:3px solid var(--border);
+    margin-bottom:0.75rem; flex-shrink:0;
+  }
+  .leader-card .avatar-wrap img { width:100%; height:100%; object-fit:cover; }
+  .leader-card .avatar-wrap .avatar-fallback {
+    width:100%; height:100%; display:flex; align-items:center; justify-content:center;
+    background:var(--gold); color:var(--ink-navy);
+    font-family:'Fraunces',serif; font-weight:700; font-size:1.2rem;
+  }
+  .leader-card h3 { margin:0; font-size:1.1rem; }
+  .leader-card .position-label { font-size:0.85rem; color:var(--forest); font-weight:600; margin:0.2rem 0 0.5rem; }
+  .leader-card .bio { font-size:0.88rem; color:var(--text-muted); margin:0.4rem 0 0.75rem; line-height:1.5; }
+  .leader-card .term-badge {
+    display:inline-block; padding:0.2rem 0.65rem; border-radius:20px;
+    font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.02em;
+  }
+  .term-badge-current { background:#eaf4ec; color:#1f4b3f; }
+  .term-badge-past { background:#e9edf3; color:#4a5568; }
+
+  .term-section { margin-bottom:2.5rem; }
+  .term-section:last-child { margin-bottom:0; }
+  .term-header {
+    display:flex; align-items:baseline; gap:0.75rem; flex-wrap:wrap;
+    margin-bottom:1.25rem; padding-bottom:0.6rem; border-bottom:2px solid var(--border);
+  }
+  .term-header h3 { margin:0; font-size:1.15rem; }
+  .term-header .term-date { color:var(--text-muted); font-size:0.85rem; }
+
+  .empty-state { text-align:center; padding:2rem 0; color:var(--text-muted); grid-column:1/-1; }
+  .empty-state p { font-size:0.95rem; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="section">
+  <div class="section-head">
+    <span class="eyebrow">Who leads us</span>
+    <h2>Executive Committee — All Terms</h2>
+    <p style="color:var(--text-muted);">Every term, members vote in a new executive committee. Current and past leadership teams are listed here for transparency and continuity.</p>
+  </div>
+
+  <div id="current-leaders-section" class="term-section">
+    <div class="term-header">
+      <h3>Current Term</h3>
+    </div>
+    <div class="leader-grid" id="current-leaders-grid">
+      <div class="empty-state"><p>Loading current leaders...</p></div>
+    </div>
+  </div>
+
+  <div id="past-leaders-section" class="term-section">
+    <div class="term-header">
+      <h3>Previous Terms</h3>
+    </div>
+    <div id="past-leaders-container"></div>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from './assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+
+  mountNav();
+  mountFooter();
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+
+  function initials(name) {
+    if (!name) return '?';
+    return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
+  }
+
+  async function attachPublicProfile(leader) {
+    const { data: pub } = await supabase.rpc('public_leader_profile', { p_user_id: leader.user_id });
+    const profile = pub && pub[0] ? pub[0] : {};
+    return {
+      ...leader,
+      full_name: profile.full_name || null,
+      profile_photo_url: profile.profile_photo_url || null,
+    };
+  }
+
+  function leaderCardHtml(leader, isCurrent = true) {
+    const name = leader.full_name || 'Unknown Member';
+    const photoUrl = leader.profile_photo_url || null;
+    const bio = leader.bio || '';
+    const badgeClass = isCurrent ? 'term-badge-current' : 'term-badge-past';
+    const badgeLabel = isCurrent ? 'Current Term' : 'Past Term';
+
+    const avatarContent = photoUrl
+      ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name)}" />`
+      : `<div class="avatar-fallback">${initials(name)}</div>`;
+
+    return `
+      <div class="leader-card">
+        <div class="avatar-wrap">${avatarContent}</div>
+        <h3>${escapeHtml(name)}</h3>
+        <div class="position-label">${escapeHtml(leader.position)}</div>
+        ${bio ? `<div class="bio">${escapeHtml(bio)}</div>` : ''}
+        <span class="term-badge ${badgeClass}">${badgeLabel}</span>
+      </div>
+    `;
+  }
+
+  // -----------------------------------------------------------------------
+  // 1. Load current-term leaders
+  // -----------------------------------------------------------------------
+  const currentGrid = document.getElementById('current-leaders-grid');
+  const pastContainer = document.getElementById('past-leaders-container');
+
+  const { data: currentLeaders, error: currentErr } = await supabase
+    .from('leaders')
+    .select('id, user_id, position, bio, term_start, term_end, display_order')
+    .eq('is_current', true)
+    .order('display_order');
+
+  if (!currentErr && currentLeaders) {
+    const enrichedLeaders = await Promise.all(currentLeaders.map(attachPublicProfile));
+    currentLeaders.splice(0, currentLeaders.length, ...enrichedLeaders);
+  }
+
+  if (currentErr) {
+    currentGrid.innerHTML = `<div class="empty-state"><p>Could not load current leaders. ${escapeHtml(currentErr.message)}</p></div>`;
+  } else if (!currentLeaders || currentLeaders.length === 0) {
+    currentGrid.innerHTML = `<div class="empty-state"><p>No current-term leaders have been published yet. Once elections conclude and an admin closes them, the winning committee will appear here.</p></div>`;
+  } else {
+    currentGrid.innerHTML = currentLeaders.map(l => leaderCardHtml(l, true)).join('');
+  }
+
+  // -----------------------------------------------------------------------
+  // 2. Load past-term leaders
+  // -----------------------------------------------------------------------
+  const { data: pastLeaders, error: pastErr } = await supabase
+    .from('leaders')
+    .select('id, user_id, position, bio, term_start, term_end, display_order')
+    .eq('is_current', false)
+    .order('term_start', { ascending: false })
+    .order('display_order');
+
+  if (!pastErr && pastLeaders) {
+    const enrichedLeaders = await Promise.all(pastLeaders.map(attachPublicProfile));
+    pastLeaders.splice(0, pastLeaders.length, ...enrichedLeaders);
+  }
+
+  if (pastErr) {
+    pastContainer.innerHTML = `<div class="empty-state"><p>Could not load previous terms. ${escapeHtml(pastErr.message)}</p></div>`;
+  } else if (!pastLeaders || pastLeaders.length === 0) {
+    pastContainer.innerHTML = `<div class="empty-state"><p>No previous terms yet — this is the association's first leadership term. Future committees will be listed here after each election cycle.</p></div>`;
+  } else {
+    // Group past leaders by term (using term_start as the grouping key)
+    const termGroups = {};
+    for (const leader of pastLeaders) {
+      const key = leader.term_start ? leader.term_start.slice(0, 7) : 'unknown';
+      if (!termGroups[key]) {
+        termGroups[key] = {
+          term_start: leader.term_start,
+          term_end: leader.term_end,
+          leaders: [],
+        };
+      }
+      termGroups[key].leaders.push(leader);
+    }
+
+    const sortedTerms = Object.entries(termGroups).sort((a, b) => {
+      // Sort most-recent term first
+      return (b[1].term_start || '').localeCompare(a[1].term_start || '');
+    });
+
+    pastContainer.innerHTML = sortedTerms.map(([key, group]) => {
+      const startDate = group.term_start ? new Date(group.term_start).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }) : 'Unknown start';
+      const endDate = group.term_end ? new Date(group.term_end).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }) : 'Present';
+      return `
+        <div class="term-section">
+          <div class="term-header">
+            <h3>${startDate} – ${endDate}</h3>
+            <span class="term-date">${group.leaders.length} position(s)</span>
+          </div>
+          <div class="leader-grid">
+            ${group.leaders.map(l => leaderCardHtml(l, false)).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+</script>
+</body>
+</html>
+

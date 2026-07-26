@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Vote — SJB Association Elections</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+<style>
+  .progress-track { height: 6px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 2rem; }
+  .progress-fill { height: 100%; background: var(--gold); transition: width 0.3s ease; }
+  .progress-label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.4rem; text-align: center; }
+  .ballot-step h3 { text-align: center; font-size: 1.4rem; margin-bottom: 0.3rem; }
+  .ballot-step .sub { text-align: center; color: var(--text-muted); margin-bottom: 1.75rem; }
+  .candidate-card {
+    display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border: 2px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 0.85rem; cursor: pointer; background: var(--paper); transition: border-color 0.15s;
+  }
+  .candidate-card:hover { border-color: var(--forest); }
+  .candidate-card.selected { border-color: var(--gold); background: #fffbf0; }
+  .candidate-card input { width: 20px; height: 20px; accent-color: var(--forest); flex-shrink: 0; }
+  .candidate-card .photo { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; background: var(--border); flex-shrink: 0; }
+  .candidate-card .fallback {
+    width: 56px; height: 56px; border-radius: 50%; background: var(--gold); color: var(--ink-navy);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-family: 'Fraunces', serif; flex-shrink: 0;
+  }
+  .candidate-card .candidate-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+  .candidate-card .candidate-name { display: block; margin: 0; font-size: 1.05rem; line-height: 1.2; }
+  .candidate-card .manifesto { font-size: 0.82rem; color: var(--text-muted); margin: 0.2rem 0 0; }
+  .wizard-nav { display: flex; justify-content: space-between; margin-top: 1.5rem; gap: 1rem; }
+  .already-voted-note { background: #eaf4ec; color: #1f4b3f; border: 1px solid #cfe6d4; border-radius: var(--radius); padding: 1.25rem; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="section" style="max-width:640px;">
+  <div class="section-head">
+    <span class="eyebrow">Elections</span>
+    <h2 id="election-title">Cast your vote</h2>
+    <p><a href="index.html">&larr; Back to elections</a></p>
+  </div>
+  <div id="alert-box"></div>
+  <div id="progress-wrap" style="display:none;">
+    <p class="progress-label" id="progress-label"></p>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%;"></div></div>
+  </div>
+  <div id="ballot-container"></div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { requireApprovedMember } from '../assets/js/session-guard.js';
+
+  mountNav('elections');
+  mountFooter();
+
+  const profile = await requireApprovedMember();
+  if (!profile) throw new Error('redirecting');
+
+  const electionId = new URLSearchParams(window.location.search).get('election');
+  const alertBox = document.getElementById('alert-box');
+  const container = document.getElementById('ballot-container');
+  if (!electionId) { alertBox.innerHTML = `<div class="alert alert-error">No election specified.</div>`; throw new Error('no election'); }
+
+  const { data: election } = await supabase.from('elections').select('*').eq('id', electionId).single();
+  if (!election) { alertBox.innerHTML = `<div class="alert alert-error">Election not found.</div>`; throw new Error('not found'); }
+  document.getElementById('election-title').textContent = `Cast your vote — ${election.title}`;
+
+  const now = new Date();
+  const withinWindow = election.status === 'active' && now >= new Date(election.start_date) && now <= new Date(election.end_date);
+  if (!withinWindow) {
+    alertBox.innerHTML = `<div class="alert alert-error">Voting is not currently open for this election.</div>`;
+    throw new Error('not open');
+  }
+
+  const { data: existingVotes } = await supabase.from('votes').select('position').eq('election_id', electionId).eq('voter_id', profile.id);
+  const votedPositions = new Set((existingVotes || []).map(v => v.position));
+
+  const { data: candidates, error } = await supabase.rpc('election_candidate_cards', { p_election_id: electionId });
+
+  if (error) { alertBox.innerHTML = `<div class="alert alert-error">${error.message}</div>`; throw new Error(error.message); }
+  if (!candidates || candidates.length === 0) {
+    alertBox.innerHTML = `<div class="alert alert-error">No approved candidates yet — check back once the ballot is finalized.</div>`;
+    throw new Error('no candidates');
+  }
+
+  const byPosition = {};
+  candidates.forEach(c => { (byPosition[c.position] ||= []).push(c); });
+
+  // Only positions the member hasn't already voted on go into the wizard.
+  const positions = Object.keys(byPosition).filter(p => !votedPositions.has(p));
+
+  if (positions.length === 0) {
+    container.innerHTML = `<div class="already-voted-note">You've already voted on every position in this election. Thank you!</div>`;
+    throw new Error('all voted');
+  }
+
+  let step = 0; // index into `positions`
+  const selections = {}; // position -> candidate_id
+
+  renderStep();
+
+  function renderStep() {
+    const position = positions[step];
+    const list = byPosition[position];
+
+    document.getElementById('progress-wrap').style.display = 'block';
+    document.getElementById('progress-label').textContent = `Position ${step + 1} of ${positions.length}`;
+    document.getElementById('progress-fill').style.width = `${((step) / positions.length) * 100}%`;
+
+    container.innerHTML = `
+      <div class="ballot-step">
+        <h3>${escapeHtml(position)}</h3>
+        <p class="sub">Choose one candidate for this position.</p>
+        <form id="step-form">
+          ${list.map(c => {
+            const photo = c.photo_url || c.profile_photo_url;
+            return `
+            <label class="candidate-card" data-cid="${c.candidate_id}">
+              <input type="radio" name="candidate" value="${c.candidate_id}" ${selections[position] === c.candidate_id ? 'checked' : ''} required />
+              ${photo ? `<img src="${photo}" class="photo" alt="${escapeHtml(c.full_name)}" />` : `<span class="fallback">${initials(c.full_name)}</span>`}
+              <div class="candidate-info">
+                <strong class="candidate-name">${escapeHtml(c.full_name)}</strong>
+                <p class="manifesto">${escapeHtml(c.manifesto || 'No manifesto submitted.')}</p>
+              </div>
+            </label>`;
+          }).join('')}
+          <div class="wizard-nav">
+            ${step > 0 ? `<button type="button" class="btn btn-outline-light" style="background:var(--ink-navy);color:#fff;" id="back-btn">Back</button>` : `<span></span>`}
+            <button type="submit" class="btn btn-gold" id="next-btn">${step === positions.length - 1 ? 'Review & Submit' : 'Next Position'}</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    container.querySelectorAll('.candidate-card').forEach(card => {
+      card.addEventListener('click', () => {
+        container.querySelectorAll('.candidate-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+      });
+    });
+    // Pre-mark selection styling if returning to a previously answered step
+    if (selections[position]) {
+      const preselected = container.querySelector(`.candidate-card[data-cid="${selections[position]}"]`);
+      if (preselected) preselected.classList.add('selected');
+    }
+
+    document.getElementById('back-btn')?.addEventListener('click', () => { step--; renderStep(); });
+
+    document.getElementById('step-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const checked = container.querySelector('input[name="candidate"]:checked');
+      if (!checked) return;
+      selections[position] = checked.value;
+
+      if (step < positions.length - 1) {
+        step++;
+        renderStep();
+      } else {
+        renderReview();
+      }
+    });
+  }
+
+  function renderReview() {
+    document.getElementById('progress-fill').style.width = '100%';
+    document.getElementById('progress-label').textContent = 'Review your choices';
+
+    container.innerHTML = `
+      <div class="ballot-step">
+        <h3>Review your ballot</h3>
+        <p class="sub">Double-check your choices — once submitted, votes cannot be changed.</p>
+        ${positions.map(position => {
+          const c = byPosition[position].find(cand => cand.candidate_id === selections[position]);
+          return `<div style="display:flex;justify-content:space-between;padding:0.65rem 0;border-bottom:1px solid var(--border);">
+            <span style="color:var(--text-muted);">${escapeHtml(position)}</span>
+            <strong>${escapeHtml(c?.full_name || '—')}</strong>
+          </div>`;
+        }).join('')}
+        <div class="wizard-nav">
+          <button type="button" class="btn btn-outline-light" style="background:var(--ink-navy);color:#fff;" id="edit-btn">Edit Choices</button>
+          <button type="button" class="btn btn-gold" id="submit-all-btn">Submit My Vote</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('edit-btn').addEventListener('click', () => { step = 0; renderStep(); });
+    document.getElementById('submit-all-btn').addEventListener('click', submitBallot);
+  }
+
+  async function submitBallot() {
+    const btn = document.getElementById('submit-all-btn');
+    btn.disabled = true; btn.textContent = 'Submitting...';
+
+    const rows = positions.map(position => ({ election_id: electionId, position, voter_id: profile.id, candidate_id: selections[position] }));
+    const { error: insertErr } = await supabase.from('votes').insert(rows);
+
+    if (insertErr) {
+      if (insertErr.code === '23505') {
+        alertBox.innerHTML = `<div class="alert alert-error">One or more of these positions were already voted on (possibly from another tab or device). Refreshing...</div>`;
+        setTimeout(() => window.location.reload(), 2000);
+      } else {
+        alertBox.innerHTML = `<div class="alert alert-error">${insertErr.message}</div>`;
+        btn.disabled = false; btn.textContent = 'Submit My Vote';
+      }
+      return;
+    }
+
+    container.innerHTML = `<div class="already-voted-note">Your vote has been recorded. Thank you for participating!</div>`;
+    document.getElementById('progress-wrap').style.display = 'none';
+    setTimeout(() => window.location.href = 'index.html', 2200);
+  }
+
+  function initials(name) {
+    if (!name) return '?';
+    return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
+  }
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

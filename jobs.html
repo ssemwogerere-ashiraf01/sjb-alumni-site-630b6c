@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Job Board — SJB Association</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+<style>
+  .page-header {
+    background: var(--paper);
+    border-bottom: 1px solid var(--border);
+    padding: 2.5rem 2rem;
+    text-align: center;
+  }
+  .page-header h1 { margin: 0 0 0.25rem; font-size: 1.8rem; }
+  .page-header p { color: var(--text-muted); margin: 0; }
+  .jobs-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:1.5rem; margin-top:2rem; }
+  .job-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+  }
+  .job-card.pending { border-style: dashed; border-color: #d4af37; background: #fffdf6; }
+  .job-card h3 { margin: 0 0 0.3rem; font-size: 1.15rem; }
+  .job-company { font-weight: 600; color: var(--forest); font-size: 0.92rem; margin-bottom: 0.5rem; }
+  .job-meta { font-size: 0.82rem; color: var(--text-muted); display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.65rem; }
+  .job-type-badge {
+    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px;
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    background: #eaf4ec; color: #1f4b3f; letter-spacing: 0.03em;
+  }
+  .pending-badge {
+    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px;
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    background: #fdf3e0; color: #8a6100; letter-spacing: 0.03em;
+  }
+  .job-desc { color: var(--text); font-size: 0.88rem; line-height: 1.55; flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 1rem; line-clamp:initial; }
+  .job-footer { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
+  .job-date { font-size: 0.78rem; color: var(--text-muted); }
+  .jobs-empty { text-align:center; color:var(--text-muted); padding:3rem 0; }
+  .post-job-section {
+    max-width: 600px; margin: 2rem auto; padding: 1.5rem;
+    background: var(--paper); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .post-job-section h3 { margin-top: 0; }
+  @media (max-width: 640px) { .jobs-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="page-header">
+  <span class="eyebrow">Opportunities</span>
+  <h1>Job Board</h1>
+  <p>Find job opportunities posted by fellow association members. Members can post openings — new listings are reviewed by an admin before they go live.</p>
+</div>
+
+<div class="section" style="padding-top:0;">
+  <div id="alert-box"></div>
+  <div id="jobs-container" class="jobs-grid">
+    <div class="jobs-empty">Loading job listings...</div>
+  </div>
+
+  <!-- Post a Job -->
+  <div class="post-job-section" id="post-job-section">
+    <h3>Post a Job Opening</h3>
+    <p style="color:var(--text-muted);font-size:0.9rem;">Share an opportunity with the association community. Your listing goes live once an admin reviews and approves it.</p>
+    <div id="post-job-alert"></div>
+    <form id="post-job-form">
+      <div class="form-group">
+        <label for="job-title">Job Title *</label>
+        <input type="text" id="job-title" required placeholder="e.g. Software Engineer" />
+      </div>
+      <div class="form-group">
+        <label for="job-company">Company</label>
+        <input type="text" id="job-company" placeholder="Your organization name" />
+      </div>
+      <div class="form-group">
+        <label for="job-location">Location</label>
+        <input type="text" id="job-location" placeholder="Kampala, Uganda / Remote" />
+      </div>
+      <div class="form-group">
+        <label for="job-type">Job Type</label>
+        <select id="job-type">
+          <option value="full-time">Full Time</option>
+          <option value="part-time">Part Time</option>
+          <option value="internship">Internship</option>
+          <option value="contract">Contract</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="job-description">Description *</label>
+        <textarea id="job-description" rows="6" required placeholder="Describe the role, requirements, and how to apply..."></textarea>
+      </div>
+      <div class="form-group">
+        <label for="job-expires">Listing expires (optional)</label>
+        <input type="date" id="job-expires" />
+      </div>
+      <button type="submit" class="btn btn-gold btn-block" id="post-job-btn">Submit for Review</button>
+    </form>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from './assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+  import { requireApprovedMember } from './assets/js/session-guard.js';
+
+  mountNav('jobs');
+  mountFooter();
+
+  const profile = await requireApprovedMember();
+  if (!profile) throw new Error('redirecting');
+
+  const container = document.getElementById('jobs-container');
+  const alertBox = document.getElementById('alert-box');
+  const postForm = document.getElementById('post-job-form');
+  const postBtn = document.getElementById('post-job-btn');
+  const postAlert = document.getElementById('post-job-alert');
+
+  await loadJobs();
+
+  postForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    postBtn.disabled = true;
+    postBtn.textContent = 'Submitting...';
+    postAlert.innerHTML = '';
+
+    const title = document.getElementById('job-title').value.trim();
+    const company = document.getElementById('job-company').value.trim();
+    const location = document.getElementById('job-location').value.trim();
+    const jobType = document.getElementById('job-type').value;
+    const description = document.getElementById('job-description').value.trim();
+    const expiresAt = document.getElementById('job-expires').value || null;
+
+    // is_active is deliberately omitted — the database defaults new member
+    // submissions to false (pending), and RLS blocks a non-admin from
+    // setting it to true directly even if they tried to.
+    const { error } = await supabase.from('jobs').insert({
+      title,
+      company: company || null,
+      location: location || null,
+      job_type: jobType,
+      description,
+      expires_at: expiresAt,
+      posted_by: profile.id,
+    });
+
+    if (error) {
+      postAlert.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+    } else {
+      postAlert.innerHTML = `<div class="alert alert-success">Submitted! Your listing will appear once an admin approves it — you'll see it below marked "Pending Review" in the meantime.</div>`;
+      postForm.reset();
+      await loadJobs();
+    }
+
+    postBtn.disabled = false;
+    postBtn.textContent = 'Submit for Review';
+  });
+
+  async function loadJobs() {
+    // RLS already scopes this to: published jobs (is_active=true), plus
+    // the caller's own pending submissions, plus everything if admin.
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('*')
+      .order('posted_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+      container.innerHTML = `<div class="jobs-empty">Could not load jobs.</div>`;
+      return;
+    }
+
+    const jobs = data || [];
+
+    // Load author names
+    for (const job of jobs) {
+      if (job.posted_by) {
+        const { data: author } = await supabase.from('profiles').select('full_name').eq('id', job.posted_by).maybeSingle();
+        job.authorName = author?.full_name || 'Member';
+      }
+    }
+
+    if (!jobs.length) {
+      container.innerHTML = `<div class="jobs-empty">No job listings yet. Post the first opportunity!</div>`;
+      return;
+    }
+
+    container.innerHTML = jobs.map(job => {
+      const typeLabels = { 'full-time': 'Full Time', 'part-time': 'Part Time', 'internship': 'Internship', 'contract': 'Contract' };
+      const descPreview = (job.description || '').length > 150 ? job.description.slice(0, 150) + '…' : job.description || '';
+      const isPending = !job.is_active;
+
+      return `
+        <div class="job-card ${isPending ? 'pending' : ''}">
+          ${isPending ? `<span class="pending-badge" style="align-self:flex-start;margin-bottom:0.5rem;">Pending Review</span>` : ''}
+          <h3>${escapeHtml(job.title)}</h3>
+          ${job.company ? `<div class="job-company">${escapeHtml(job.company)}</div>` : ''}
+          <div class="job-meta">
+            ${job.job_type ? `<span class="job-type-badge">${typeLabels[job.job_type] || job.job_type}</span>` : ''}
+            ${job.location ? `<span>📍 ${escapeHtml(job.location)}</span>` : ''}
+            ${job.expires_at ? `<span>Expires ${new Date(job.expires_at).toLocaleDateString()}</span>` : ''}
+          </div>
+          ${descPreview ? `<div class="job-desc">${escapeHtml(descPreview)}</div>` : ''}
+          <div class="job-footer">
+            <span class="job-date">Posted ${new Date(job.posted_at).toLocaleDateString()} by ${escapeHtml(job.authorName || 'Member')}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

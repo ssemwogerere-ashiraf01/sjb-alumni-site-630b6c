@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Forum — SJB Association</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+<style>
+  .forum-layout { display:grid; grid-template-columns: 320px 1fr; gap:1.5rem; align-items:start; }
+  .forum-panel { background:var(--paper); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
+  .forum-panel h3 { margin-top:0; }
+  .forum-sidebar { position: sticky; top: 1rem; }
+  .forum-topic-list { display:flex; flex-direction:column; gap:0.75rem; }
+  .forum-topic-btn {
+    width:100%; text-align:left; border:1px solid var(--border); background:#fff; border-radius:12px; padding:0.9rem 1rem; cursor:pointer; font-family:inherit;
+  }
+  .forum-topic-btn:hover { background:#faf8f2; }
+  .forum-topic-btn.active { border-color:var(--gold); box-shadow:0 0 0 3px rgba(201,162,39,0.12); }
+  .forum-topic-title { font-weight:700; color:var(--ink-navy); margin:0 0 0.25rem; }
+  .forum-topic-meta { font-size:0.8rem; color:var(--text-muted); }
+  .forum-topic-preview { margin-top:0.45rem; color:var(--text); font-size:0.88rem; line-height:1.45; }
+  .forum-topic-preview-full[hidden], .forum-topic-preview-short[hidden] { display:none; }
+  .forum-topic-toggle {
+    margin-top:0.45rem;
+    border:0;
+    background:none;
+    color:var(--gold);
+    padding:0;
+    font:inherit;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .forum-main { display:flex; flex-direction:column; gap:1.25rem; }
+  .forum-post-card { padding:1.5rem; }
+  .forum-post-body { white-space:pre-wrap; color:var(--text); }
+  .forum-post-body-short[hidden], .forum-post-body-full[hidden] { display:none; }
+  .reply-marquee {
+    overflow:hidden;
+    border-top:1px solid var(--border);
+    border-bottom:1px solid var(--border);
+    padding:1rem 0;
+    background:linear-gradient(180deg, #fff, #fbfaf5);
+  }
+  .reply-track {
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:1rem;
+    padding-bottom:0.25rem;
+  }
+  .reply-card {
+    background:var(--paper);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:1rem;
+    box-shadow:var(--shadow);
+  }
+  .reply-author { display:flex; align-items:center; gap:0.75rem; margin-bottom:0.65rem; }
+  .reply-avatar { width:40px; height:40px; border-radius:50%; overflow:hidden; background:var(--gold); color:var(--ink-navy); display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0; }
+  .reply-avatar img { width:100%; height:100%; object-fit:cover; }
+  .reply-name { font-weight:700; color:var(--ink-navy); margin:0; font-size:0.92rem; }
+  .reply-time { font-size:0.78rem; color:var(--text-muted); }
+  .reply-content { margin:0; color:var(--text); font-size:0.9rem; line-height:1.55; white-space:pre-wrap; }
+  .reply-content-short[hidden], .reply-content-full[hidden] { display:none; }
+  .reply-toggle {
+    margin-top:0.65rem;
+    border:0;
+    background:none;
+    color:var(--gold);
+    padding:0;
+    font:inherit;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .topic-form textarea, .reply-form textarea {
+    width:100%; padding:0.75rem 0.9rem; border:1px solid var(--border); border-radius:var(--radius); font-family:inherit; font-size:0.95rem;
+  }
+  .forum-meta { display:flex; gap:0.6rem; flex-wrap:wrap; align-items:center; color:var(--text-muted); font-size:0.82rem; }
+  .forum-badge { display:inline-block; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; }
+  .forum-badge-active { background:#eaf4ec; color:#1f4b3f; }
+  .forum-badge-locked { background:#fdecec; color:#9c2b2b; }
+  .forum-empty { text-align:center; color:var(--text-muted); padding:1.5rem 0; }
+  @media (max-width: 900px) {
+    .forum-layout { grid-template-columns:1fr; }
+    .forum-sidebar { position: static; }
+  }
+  @media (max-width: 640px) {
+    .reply-track { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="section">
+  <div class="section-head" style="text-align:left;margin-left:0;max-width:none;">
+    <span class="eyebrow">Forum</span>
+    <h2 style="margin:0;">What our members say about this post</h2>
+    <p style="color:var(--text-muted);max-width:760px;">Start a discussion, read the main post, and follow the replies underneath. Approved members can post new topics and respond to existing ones.</p>
+  </div>
+
+  <div id="alert-box"></div>
+
+  <div class="forum-layout">
+    <div class="forum-sidebar forum-panel" style="padding:1.2rem;">
+      <h3>Start a post</h3>
+      <p id="topic-permission-note" style="color:var(--text-muted);margin-top:-0.25rem;"></p>
+      <form id="topic-form" class="topic-form">
+        <div class="form-group">
+          <label for="topic-title">Title</label>
+          <input type="text" id="topic-title" required placeholder="Best Practices for Managing Localhost Admin Panels" />
+        </div>
+        <div class="form-group">
+          <label for="topic-category">Category</label>
+          <input type="text" id="topic-category" placeholder="Admin, Database, Security" />
+        </div>
+        <div class="form-group">
+          <label for="topic-content">Post content</label>
+          <textarea id="topic-content" rows="9" required placeholder="Write your question or discussion here..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-gold btn-block" id="topic-submit-btn">Publish Post</button>
+      </form>
+
+      <div style="margin-top:1.5rem;">
+        <h3 style="margin-bottom:0.8rem;">Recent posts</h3>
+        <div id="topics-list" class="forum-topic-list"></div>
+      </div>
+    </div>
+
+    <div class="forum-main">
+      <div id="topic-detail" class="forum-panel forum-post-card">
+        <div class="forum-empty">Loading forum posts...</div>
+      </div>
+
+      <div class="forum-panel" style="padding:1.2rem;">
+        <h3 style="margin-bottom:0.2rem;">What our members say about this post</h3>
+        <p style="color:var(--text-muted);margin-top:0;">Replies and comments appear here in a scrolling strip for quick browsing.</p>
+        <div id="replies-marquee" class="reply-marquee"><div class="forum-empty">Loading replies...</div></div>
+      </div>
+
+      <div class="forum-panel" style="padding:1.2rem;">
+        <h3 style="margin-top:0;">Add your response</h3>
+        <form id="reply-form" class="reply-form">
+          <div class="form-group">
+            <label for="reply-content">Your reply</label>
+            <textarea id="reply-content" rows="5" required placeholder="Share your thoughts, advice, or answer here..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-gold" id="reply-submit-btn">Post Reply</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { requireApprovedMember } from '../assets/js/session-guard.js';
+
+  mountNav('forum');
+  mountFooter();
+
+  const profile = await requireApprovedMember();
+  if (!profile) throw new Error('redirecting');
+
+  const alertBox = document.getElementById('alert-box');
+  const topicsList = document.getElementById('topics-list');
+  const topicDetail = document.getElementById('topic-detail');
+  const repliesMarquee = document.getElementById('replies-marquee');
+  const topicForm = document.getElementById('topic-form');
+  const replyForm = document.getElementById('reply-form');
+  const topicPermissionNote = document.getElementById('topic-permission-note');
+
+  let topics = [];
+  let selectedTopicId = new URLSearchParams(window.location.search).get('topic') || '';
+  const isAdmin = profile?.role === 'admin';
+
+  if (!isAdmin) {
+    topicForm.style.display = 'none';
+    topicPermissionNote.textContent = 'Only admins can start new posts. Members can reply to the post below.';
+  } else {
+    topicPermissionNote.textContent = 'Admins can publish new forum posts here.';
+  }
+
+  await loadForum();
+
+  topicForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!isAdmin) return;
+    const btn = document.getElementById('topic-submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Publishing...';
+
+    const title = document.getElementById('topic-title').value.trim();
+    const category = document.getElementById('topic-category').value.trim();
+    const content = document.getElementById('topic-content').value.trim();
+
+    const { data, error } = await supabase.from('forum_topics').insert({
+      title,
+      category: category || null,
+      content,
+      author_id: profile.id,
+      is_active: true,
+    }).select('id').single();
+
+    if (error) {
+      showAlert(error.message, 'error');
+    } else {
+      topicForm.reset();
+      selectedTopicId = data.id;
+      showAlert('Post published. Members can now read and reply.', 'success');
+      await loadForum();
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Publish Post';
+  });
+
+  replyForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!selectedTopicId) return;
+
+    const btn = document.getElementById('reply-submit-btn');
+    const replyText = document.getElementById('reply-content').value.trim();
+    if (!replyText) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Posting...';
+
+    const { error } = await supabase.from('forum_replies').insert({
+      topic_id: selectedTopicId,
+      content: replyText,
+      author_id: profile.id,
+      is_active: true,
+    });
+
+    if (error) {
+      showAlert(error.message, 'error');
+    } else {
+      document.getElementById('reply-content').value = '';
+      showAlert('Your reply was posted.', 'success');
+      await loadTopicDetail();
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Post Reply';
+  });
+
+  async function loadForum() {
+    const { data, error } = await supabase
+      .from('forum_topics')
+      .select('id, title, category, content, created_at, is_locked, is_active, author_id')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) {
+      showAlert(error.message, 'error');
+      topicsList.innerHTML = `<div class="forum-empty">Could not load posts.</div>`;
+      return;
+    }
+
+    topics = data || [];
+    for (const topic of topics) {
+      topic.author = await loadForumAuthor(topic.author_id);
+    }
+    if (!selectedTopicId && topics.length) selectedTopicId = topics[0].id;
+    if (selectedTopicId && !topics.some(topic => topic.id === selectedTopicId) && topics.length) selectedTopicId = topics[0].id;
+
+    renderTopicsList();
+    await loadTopicDetail();
+  }
+
+  function renderTopicsList() {
+    if (!topics.length) {
+      topicsList.innerHTML = `<div class="forum-empty">No forum posts yet. Be the first to start one.</div>`;
+      return;
+    }
+
+    topicsList.innerHTML = topics.map(topic => {
+      const isActive = topic.id === selectedTopicId;
+      const words = (topic.content || '').trim().split(/\s+/).filter(Boolean);
+      const shouldTruncate = words.length > 15;
+      const shortContent = shouldTruncate ? words.slice(0, 15).join(' ') : (topic.content || '');
+      return `
+        <button type="button" class="forum-topic-btn ${isActive ? 'active' : ''}" data-topic-id="${topic.id}">
+          <div class="forum-topic-title">${escapeHtml(topic.title)}</div>
+          <div class="forum-topic-meta">${escapeHtml(topic.category || 'General')} · ${new Date(topic.created_at).toLocaleDateString()}</div>
+          ${topic.content ? `
+            <div class="forum-topic-preview" data-topic-preview>
+              ${shouldTruncate
+                ? `
+                  <span class="forum-topic-preview-short">${escapeHtml(shortContent)}...</span>
+                  <span class="forum-topic-preview-full" hidden>${escapeHtml(topic.content || '')}</span>
+                  <button type="button" class="forum-topic-toggle" data-topic-toggle>Readmore</button>
+                `
+                : `<span>${escapeHtml(topic.content || '')}</span>`
+              }
+            </div>
+          ` : ''}
+        </button>
+      `;
+    }).join('');
+
+    topicsList.querySelectorAll('[data-topic-id]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        selectedTopicId = btn.dataset.topicId;
+        const url = new URL(window.location.href);
+        url.searchParams.set('topic', selectedTopicId);
+        window.history.replaceState({}, '', url);
+        renderTopicsList();
+        await loadTopicDetail();
+      });
+    });
+
+    topicsList.querySelectorAll('[data-topic-toggle]').forEach(button => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const buttonEl = button;
+        const preview = buttonEl.closest('[data-topic-preview]');
+        if (!preview) return;
+        const isExpanded = preview.dataset.expanded === 'true';
+        preview.dataset.expanded = isExpanded ? 'false' : 'true';
+        buttonEl.textContent = isExpanded ? 'Readmore' : 'Read less';
+        const shortSpan = preview.querySelector('.forum-topic-preview-short');
+        const fullSpan = preview.querySelector('.forum-topic-preview-full');
+        if (shortSpan) shortSpan.hidden = isExpanded;
+        if (fullSpan) fullSpan.hidden = !isExpanded;
+      });
+    });
+  }
+
+  async function loadTopicDetail() {
+    const topic = topics.find(item => item.id === selectedTopicId);
+    if (!topic) {
+      topicDetail.innerHTML = `<div class="forum-empty">Select a post to view it.</div>`;
+      repliesMarquee.innerHTML = `<div class="forum-empty">No post selected.</div>`;
+      return;
+    }
+
+    const words = (topic.content || '').trim().split(/\s+/).filter(Boolean);
+    const shouldTruncateDetail = words.length > 30;
+    const shortDetailContent = shouldTruncateDetail ? words.slice(0, 30).join(' ') : (topic.content || '');
+
+    topicDetail.innerHTML = `
+      <div class="forum-meta" style="margin-bottom:0.8rem;">
+        <span class="forum-badge ${topic.is_locked ? 'forum-badge-locked' : 'forum-badge-active'}">${topic.is_locked ? 'Locked' : 'Open'}</span>
+        <span>${escapeHtml(topic.category || 'General')}</span>
+        <span>Posted ${new Date(topic.created_at).toLocaleDateString()}</span>
+      </div>
+      <h3 style="margin:0 0 0.45rem;">${escapeHtml(topic.title)}</h3>
+      <div class="forum-meta" style="margin-bottom:1rem;">
+        <span>By ${escapeHtml(topic.author?.full_name || 'Member')}</span>
+      </div>
+      <div id="topic-detail-body" class="forum-post-body" data-detail-expanded="false">
+        ${shouldTruncateDetail
+          ? `
+            <span class="forum-post-body-short">${escapeHtml(shortDetailContent)}...</span>
+            <span class="forum-post-body-full" hidden>${escapeHtml(topic.content || '')}</span>
+            <button type="button" class="forum-topic-toggle" data-detail-toggle>Readmore</button>
+          `
+          : escapeHtml(topic.content || '')
+        }
+      </div>
+    `;
+
+    const detailToggle = topicDetail.querySelector('[data-detail-toggle]');
+    if (detailToggle) {
+      detailToggle.addEventListener('click', () => {
+        const body = document.getElementById('topic-detail-body');
+        if (!body) return;
+        const isExpanded = body.dataset.detailExpanded === 'true';
+        body.dataset.detailExpanded = isExpanded ? 'false' : 'true';
+        detailToggle.textContent = isExpanded ? 'Read less' : 'Readmore';
+        const shortSpan = body.querySelector('.forum-post-body-short');
+        const fullSpan = body.querySelector('.forum-post-body-full');
+        if (shortSpan) shortSpan.hidden = isExpanded;
+        if (fullSpan) fullSpan.hidden = !isExpanded;
+      });
+    }
+
+    const { data: replies, error } = await supabase
+      .from('forum_replies')
+      .select('id, content, created_at, author_id, is_active')
+      .eq('topic_id', topic.id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      repliesMarquee.innerHTML = `<div class="forum-empty">Could not load replies.</div>`;
+      return;
+    }
+
+    if (!replies || replies.length === 0) {
+      repliesMarquee.innerHTML = `<div class="forum-empty">No replies yet. Be the first member to respond.</div>`;
+      return;
+    }
+
+    for (const reply of replies) {
+      reply.author = await loadForumAuthor(reply.author_id);
+    }
+
+    const replyCards = replies.map(reply => replyCardHtml(reply)).join('');
+    repliesMarquee.innerHTML = `
+      <div class="reply-track">
+        ${replyCards}
+      </div>
+    `;
+
+    repliesMarquee.querySelectorAll('[data-reply-toggle]').forEach(button => {
+      button.addEventListener('click', () => {
+        const card = button.closest('.reply-card');
+        if (!card) return;
+        const isExpanded = card.dataset.expanded === 'true';
+        card.dataset.expanded = isExpanded ? 'false' : 'true';
+        button.textContent = isExpanded ? 'Read less' : 'Readmore';
+        const shortSpan = card.querySelector('.reply-content-short');
+        const fullSpan = card.querySelector('.reply-content-full');
+        if (shortSpan) shortSpan.hidden = isExpanded;
+        if (fullSpan) fullSpan.hidden = !isExpanded;
+      });
+    });
+  }
+
+  function replyCardHtml(reply) {
+    const initials = getInitials(reply.author?.full_name);
+    const avatar = reply.author?.profile_photo_url
+      ? `<img src="${escapeHtml(reply.author.profile_photo_url)}" alt="${escapeHtml(reply.author?.full_name || 'Member')}" />`
+      : `<span>${initials}</span>`;
+    const words = (reply.content || '').trim().split(/\s+/).filter(Boolean);
+    const shouldTruncate = words.length > 15;
+    const shortContent = shouldTruncate ? words.slice(0, 15).join(' ') : reply.content || '';
+
+    return `
+      <div class="reply-card" data-expanded="false">
+        <div class="reply-author">
+          <div class="reply-avatar">${avatar}</div>
+          <div>
+            <p class="reply-name">${escapeHtml(reply.author?.full_name || 'Member')}</p>
+            <div class="reply-time">${new Date(reply.created_at).toLocaleString()}</div>
+          </div>
+        </div>
+        ${shouldTruncate
+          ? `
+            <p class="reply-content reply-content-short">${escapeHtml(shortContent)}...</p>
+            <p class="reply-content reply-content-full" hidden>${escapeHtml(reply.content || '')}</p>
+            <button type="button" class="reply-toggle" data-reply-toggle>Readmore</button>
+          `
+          : `<p class="reply-content">${escapeHtml(reply.content || '')}</p>`
+        }
+      </div>
+    `;
+  }
+
+  async function loadForumAuthor(userId) {
+    if (!userId) return null;
+    const { data } = await supabase.rpc('forum_author_profile', { p_user_id: userId });
+    return data && data[0] ? data[0] : null;
+  }
+
+  function showAlert(msg, type) {
+    alertBox.innerHTML = `<div class="alert alert-${type}">${escapeHtml(msg)}</div>`;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+
+  function getInitials(name) {
+    if (!name) return '?';
+    return name.trim().split(/\s+/).slice(0, 2).map(word => word[0]?.toUpperCase()).join('');
+  }
+</script>
+</body>
+</html>

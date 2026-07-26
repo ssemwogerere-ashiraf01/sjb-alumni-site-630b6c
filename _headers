@@ -1,0 +1,16 @@
+/*
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://checkout.flutterwave.com https://esm.sh; connect-src 'self' https://*.supabase.co https://api.flutterwave.com https://open.er-api.com; img-src 'self' https: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-src https://checkout.flutterwave.com;
+
+/admin/*
+  X-Robots-Tag: noindex, nofollow
+
+/savings/*
+  X-Robots-Tag: noindex, nofollow
+
+/elections/*
+  X-Robots-Tag: noindex, nofollow

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Candidates — SJB Association Elections</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+<style>
+  .candidate-photo { width:64px; height:64px; border-radius:50%; object-fit:cover; background:var(--border); }
+  .candidate-fallback { width:64px; height:64px; border-radius:50%; background:var(--gold); color:var(--ink-navy); display:flex; align-items:center; justify-content:center; font-weight:700; font-family:'Fraunces',serif; font-size:1.2rem; }
+  .position-group { margin-bottom: 2.5rem; }
+  .position-group h3 { border-bottom: 2px solid var(--gold); display:inline-block; padding-bottom:0.25rem; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="section">
+  <div class="section-head">
+    <span class="eyebrow">Elections</span>
+    <h2 id="election-title">Candidates</h2>
+    <p><a href="index.html">&larr; Back to elections</a></p>
+  </div>
+  <div id="content"></div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { requireApprovedMember } from '../assets/js/session-guard.js';
+
+  mountNav('elections');
+  mountFooter();
+
+  const profile = await requireApprovedMember();
+  if (!profile) throw new Error('redirecting');
+
+  const electionId = new URLSearchParams(window.location.search).get('election');
+  const content = document.getElementById('content');
+  if (!electionId) { content.innerHTML = `<div class="alert alert-error">No election specified.</div>`; throw new Error('no election'); }
+
+  const { data: election } = await supabase.from('elections').select('title').eq('id', electionId).single();
+  document.getElementById('election-title').textContent = election ? `Candidates — ${election.title}` : 'Candidates';
+
+  const { data: candidates, error } = await supabase.rpc('election_candidate_cards', { p_election_id: electionId });
+
+  if (error) { content.innerHTML = `<div class="alert alert-error">${error.message}</div>`; throw new Error(error.message); }
+  if (!candidates || candidates.length === 0) {
+    content.innerHTML = `<p style="text-align:center;color:var(--text-muted);">No candidates have been approved for this election yet.</p>`;
+  } else {
+    const byPosition = {};
+    candidates.forEach(c => { (byPosition[c.position] ||= []).push(c); });
+
+    content.innerHTML = Object.entries(byPosition).map(([position, list]) => `
+      <div class="position-group">
+        <h3>${escapeHtml(position)}</h3>
+        <div class="card-grid">
+          ${list.map(c => `
+            <div class="card" style="display:flex;gap:1rem;align-items:flex-start;">
+              ${(c.photo_url || c.profile_photo_url)
+                ? `<img src="${c.photo_url || c.profile_photo_url}" class="candidate-photo" alt="${escapeHtml(c.full_name)}" />`
+                : `<div class="candidate-fallback">${initials(c.full_name)}</div>`}
+              <div>
+                <h3 style="margin:0 0 0.3rem;font-size:1.05rem;">${escapeHtml(c.full_name)}</h3>
+                <p style="margin:0;">${escapeHtml(c.manifesto || 'No manifesto submitted.')}</p>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function initials(name) {
+    if (!name) return '?';
+    return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
+  }
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

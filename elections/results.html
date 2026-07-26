@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Results — SJB Association Elections</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+<style>
+  .result-position { background:var(--paper); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:1.5rem; margin-bottom:1.5rem; }
+  .bar-row { display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem; }
+  .bar-label { width:160px; font-size:0.9rem; flex-shrink:0; }
+  .bar-track { flex:1; background:var(--parchment); border-radius:6px; overflow:hidden; height:22px; }
+  .bar-fill { background:var(--forest); height:100%; display:flex; align-items:center; justify-content:flex-end; padding-right:0.5rem; color:#fff; font-size:0.78rem; font-weight:600; }
+  .winner-tag { background:var(--gold); color:var(--ink-navy); font-size:0.7rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:10px; margin-left:0.5rem; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="section">
+  <div class="section-head">
+    <span class="eyebrow">Elections</span>
+    <h2 id="election-title">Results</h2>
+    <p><a href="index.html">&larr; Back to elections</a></p>
+  </div>
+  <div id="content"></div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { requireApprovedMember } from '../assets/js/session-guard.js';
+
+  mountNav('elections');
+  mountFooter();
+
+  const profile = await requireApprovedMember();
+  if (!profile) throw new Error('redirecting');
+
+  const electionId = new URLSearchParams(window.location.search).get('election');
+  const content = document.getElementById('content');
+  if (!electionId) { content.innerHTML = `<div class="alert alert-error">No election specified.</div>`; throw new Error('no election'); }
+
+  const { data: election } = await supabase.from('elections').select('*').eq('id', electionId).single();
+  if (!election) { content.innerHTML = `<div class="alert alert-error">Election not found.</div>`; throw new Error('not found'); }
+  document.getElementById('election-title').textContent = `Results — ${election.title}`;
+
+  if (election.status !== 'closed') {
+    const { data: myVotes } = await supabase.from('votes').select('position').eq('election_id', electionId).eq('voter_id', profile.id);
+    content.innerHTML = `
+      <div class="alert alert-success">Voting is still in progress — tallies are only published once the election officially closes, to keep the process fair.</div>
+      <p style="color:var(--text-muted);">You've voted on <strong>${(myVotes || []).length}</strong> position(s) so far.</p>
+      <a href="vote.html?election=${electionId}" class="btn btn-gold">Go to Ballot</a>
+    `;
+    throw new Error('not closed');
+  }
+
+  // election_results() is a security-definer function that returns only
+  // aggregate counts — it never exposes who voted for whom.
+  const { data: results, error } = await supabase.rpc('election_results', { p_election_id: electionId });
+  const { data: candidates } = await supabase.rpc('election_candidate_cards', { p_election_id: electionId });
+
+  if (error) { content.innerHTML = `<div class="alert alert-error">${error.message}</div>`; throw new Error(error.message); }
+
+  const nameById = new Map((candidates || []).map(c => [c.candidate_id, c.full_name || 'Unknown']));
+  const byPosition = {};
+  (results || []).forEach(r => { (byPosition[r.position] ||= []).push(r); });
+  // Make sure positions with zero votes still show up (0 for every candidate)
+  (candidates || []).forEach(c => {
+    if (!byPosition[c.position]) byPosition[c.position] = [];
+    if (!byPosition[c.position].some(r => r.candidate_id === c.candidate_id)) byPosition[c.position].push({ candidate_id: c.candidate_id, position: c.position, vote_count: 0 });
+  });
+
+  if (Object.keys(byPosition).length === 0) {
+    content.innerHTML = `<p style="text-align:center;color:var(--text-muted);">No votes were recorded for this election.</p>`;
+    throw new Error('no results');
+  }
+
+  content.innerHTML = Object.entries(byPosition).map(([position, rows]) => {
+    const total = rows.reduce((s, r) => s + Number(r.vote_count), 0) || 1;
+    const maxVotes = Math.max(...rows.map(r => Number(r.vote_count)));
+    const sorted = [...rows].sort((a, b) => Number(b.vote_count) - Number(a.vote_count));
+    return `<div class="result-position">
+      <h3>${escapeHtml(position)}</h3>
+      ${sorted.map(r => {
+        const pct = Math.round((Number(r.vote_count) / total) * 100);
+        const isWinner = Number(r.vote_count) === maxVotes && maxVotes > 0;
+        return `<div class="bar-row">
+          <div class="bar-label">${escapeHtml(nameById.get(r.candidate_id) || 'Unknown')}${isWinner ? '<span class="winner-tag">Leading</span>' : ''}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%;">${r.vote_count} (${pct}%)</div></div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>
