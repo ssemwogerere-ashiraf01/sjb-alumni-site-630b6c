@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Savings Dashboard — SJB Association</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+<div id="app-nav"></div>
+<div id="savings-sidebar"></div>
+
+<div class="section savings-content">
+  <div class="section-head">
+    <span class="eyebrow">Savings</span>
+    <h2>Your savings groups</h2>
+  </div>
+  <div id="alert-box"></div>
+  <div class="card" id="announcements-card" style="margin-bottom:1.5rem;">
+    <h3 style="margin-top:0;">Savings Announcements</h3>
+    <div id="announcements-list"><p style="color:var(--text-muted);font-size:0.9rem;">Loading...</p></div>
+  </div>
+  <div class="card-grid" id="groups-grid"></div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { mountSavingsSidebar } from '../assets/js/savings-sidebar.js';
+  import { requireActiveSavingsGroup } from '../assets/js/savings-guard.js';
+  import '../assets/js/session-guard.js';
+
+  mountNav('savings');
+  mountFooter();
+  mountSavingsSidebar('dashboard');
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('contributed')) {
+    document.getElementById('alert-box').innerHTML = `<div class="alert alert-success">Contribution confirmed. Thank you!</div>`;
+  }
+
+  const result = await requireActiveSavingsGroup();
+  if (!result) throw new Error('redirecting');
+  const { memberships } = result;
+
+  const thisMonth = new Date().toISOString().slice(0, 7) + '-01';
+  const grid = document.getElementById('groups-grid');
+
+  const { data: announcements } = await supabase
+    .from('savings_announcements')
+    .select('title, content, posted_at, group_id, is_active, savings_groups(name)')
+    .eq('is_active', true)
+    .order('is_pinned', { ascending: false })
+    .order('posted_at', { ascending: false })
+    .limit(5);
+
+  document.getElementById('announcements-list').innerHTML = (announcements && announcements.length)
+    ? announcements.map(a => `<div class="list-item"><strong>${escapeHtml(a.title)}</strong><div class="meta">${escapeHtml(a.savings_groups?.name || 'Association-wide')} · ${new Date(a.posted_at).toLocaleDateString()}</div><div style="color:var(--text-muted);font-size:0.9rem;">${escapeHtml(a.content)}</div></div>`).join('')
+    : `<p style="color:var(--text-muted);font-size:0.9rem;">No active announcements right now.</p>`;
+
+  const cards = await Promise.all(memberships.map(async (m) => {
+    const g = m.savings_groups;
+    const { data: txns } = await supabase
+      .from('savings_transactions')
+      .select('type, amount, status, month_year')
+      .eq('group_id', g.id);
+
+    const totalSaved = (txns || [])
+      .filter(t => t.type === 'contribution' && t.status === 'completed')
+      .reduce((sum, t) => sum + Number(t.amount), 0)
+      - (txns || [])
+      .filter(t => t.type === 'withdrawal' && t.status === 'completed')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    const paidThisMonth = (txns || []).some(t => t.type === 'contribution' && t.month_year === thisMonth && t.status === 'completed');
+
+    return `<div class="card">
+      <h3>${escapeHtml(g.name)}</h3>
+      <p>Total saved: <strong>UGX ${totalSaved.toLocaleString()}</strong></p>
+      <p>This month: ${paidThisMonth ? '<span style="color:var(--forest);font-weight:600;">Paid ✓</span>' : '<span style="color:#9c2b2b;font-weight:600;">Not yet paid</span>'}</p>
+      <div style="display:flex;gap:0.5rem;margin-top:1rem;flex-wrap:wrap;">
+        <a href="contribute.html?group=${g.id}" class="btn btn-gold" style="flex:1;">Contribute</a>
+        <a href="history.html?group=${g.id}" class="btn btn-outline-light" style="flex:1;background:var(--forest);color:#fff;">History</a>
+        <a href="withdraw.html?group=${g.id}" class="btn btn-outline-light" style="flex:1;background:var(--ink-navy);color:#fff;">Withdraw</a>
+      </div>
+    </div>`;
+  }));
+
+  grid.innerHTML = cards.join('');
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

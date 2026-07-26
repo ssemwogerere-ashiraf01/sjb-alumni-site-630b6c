@@ -1,4 +1,4 @@
-import { supabase } from './supabase-client.js';
+﻿import { supabase } from './supabase-client.js';
 import { BASE_URL } from './site-config.js';
 import { logout } from './auth.js';
 
@@ -98,24 +98,32 @@ export async function mountNav(activeKey = '') {
       ${mobileMenuEnd}
     </nav>`;
 
-  wireMobileNav(mount);
+wireMobileNav(mount);
 
-  const btn = document.getElementById('nav-avatar-btn');
+  const avatarBtn = document.getElementById('nav-avatar-btn');
   const dropdown = document.getElementById('nav-dropdown');
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const open = dropdown.classList.toggle('open');
-    btn.setAttribute('aria-expanded', String(open));
-  });
-  document.addEventListener('click', (e) => {
-    if (!document.getElementById('nav-avatar-wrap').contains(e.target)) dropdown.classList.remove('open');
-  });
-  document.getElementById('nav-signout-btn').addEventListener('click', logout);
+  if (avatarBtn && dropdown) {
+    avatarBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = dropdown.classList.toggle('open');
+      avatarBtn.setAttribute('aria-expanded', String(open));
+    });
+    document.addEventListener('click', (e) => {
+      if (!document.getElementById('nav-avatar-wrap')?.contains(e.target)) {
+        dropdown.classList.remove('open');
+        avatarBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  document.getElementById('nav-signout-btn')?.addEventListener('click', logout);
 }
 
 function wireMobileNav(mount) {
   const toggle = document.getElementById('nav-toggle');
   const menu = document.getElementById('nav-menu');
+  const postsParent = mount.querySelector('.nav-dropdown-parent');
+  const postsTrigger = mount.querySelector('.nav-dropdown-trigger');
   if (!toggle || !menu) return;
 
   const closeMenu = () => {
@@ -128,9 +136,20 @@ function wireMobileNav(mount) {
     const nav = mount.querySelector('.site-nav');
     const open = nav?.classList.toggle('nav-open');
     toggle.setAttribute('aria-expanded', String(Boolean(open)));
+    if (!open) postsParent?.classList.remove('nav-open-mobile');
   });
 
-  menu.querySelectorAll('a').forEach((link) => link.addEventListener('click', closeMenu));
+  postsTrigger?.addEventListener('click', (e) => {
+    if (!window.matchMedia('(max-width: 900px)').matches) return;
+    e.preventDefault();
+    e.stopPropagation();
+    postsParent?.classList.toggle('nav-open-mobile');
+  });
+
+  menu.querySelectorAll('a').forEach((link) => {
+    if (link === postsTrigger) return;
+    link.addEventListener('click', closeMenu);
+  });
 }
 
 export function mountFooter() {

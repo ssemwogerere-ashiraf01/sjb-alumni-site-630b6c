@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Join a Savings Group — SJB Association</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+<script src="https://checkout.flutterwave.com/v3.js"></script>
+</head>
+<body>
+<div id="app-nav"></div>
+<div id="savings-sidebar"></div>
+
+<div class="section savings-content">
+  <div class="section-head">
+    <span class="eyebrow">Savings</span>
+    <h2>Join a savings group</h2>
+    <p style="color:var(--text-muted);">Only approved, fee-paid association members can join. Each group saves a fixed <strong>UGX 10,000 per month</strong>. A one-time group join fee applies.</p>
+  </div>
+
+  <div id="alert-box"></div>
+  <div class="card-grid" id="groups-grid"><p style="text-align:center;color:var(--text-muted);grid-column:1/-1;">Loading groups...</p></div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { mountSavingsSidebar } from '../assets/js/savings-sidebar.js';
+  import { paySavingsJoinFee } from '../assets/js/flutterwave.js';
+  import { showFeePaymentPrompt } from '../assets/js/fee-prompt.js';
+  import '../assets/js/session-guard.js';
+
+  mountNav('savings');
+  mountFooter();
+  mountSavingsSidebar('register');
+
+  const params = new URLSearchParams(window.location.search);
+  const alertBox = document.getElementById('alert-box');
+  if (params.has('paid')) {
+    alertBox.innerHTML = `<div class="alert alert-success">Payment received. An admin will activate your membership shortly — check back soon.</div>`;
+  }
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) window.location.href = '../login.html';
+  const { data: profile } = await supabase.from('profiles').select('status, membership_fee_paid').eq('id', session.user.id).single();
+  if (!profile || profile.status !== 'approved') window.location.href = '../pending-approval.html';
+  if (!profile.membership_fee_paid) { showFeePaymentPrompt(); throw new Error('unpaid'); }
+
+  const { data: groups } = await supabase.from('savings_groups').select('*').eq('is_active', true);
+  const { data: myMemberships } = await supabase.from('savings_group_members').select('group_id, status, join_fee_paid').eq('user_id', session.user.id);
+  const myMap = new Map((myMemberships || []).map(m => [m.group_id, m]));
+
+  const grid = document.getElementById('groups-grid');
+  if (!groups || groups.length === 0) {
+    grid.innerHTML = `<p style="text-align:center;color:var(--text-muted);grid-column:1/-1;">No savings groups are open right now. Check back soon.</p>`;
+  } else {
+    grid.innerHTML = groups.map(g => {
+      const mine = myMap.get(g.id);
+      let actionHtml;
+      if (mine?.status === 'active') {
+        actionHtml = `<a href="dashboard.html" class="btn btn-gold btn-block">Go to Group</a>`;
+      } else if (mine?.status === 'pending' && mine?.join_fee_paid) {
+        actionHtml = `<button class="btn btn-outline-light" style="background:var(--forest);color:#fff;width:100%;" disabled>Awaiting Admin Approval</button>`;
+      } else if (mine?.status === 'pending') {
+        actionHtml = `<button class="btn btn-gold btn-block join-btn" data-group='${JSON.stringify(g)}'>Pay Join Fee (UGX ${Number(g.group_join_fee).toLocaleString()})</button>`;
+      } else {
+        actionHtml = `<button class="btn btn-gold btn-block join-btn" data-group='${JSON.stringify(g)}'>Join — Pay UGX ${Number(g.group_join_fee).toLocaleString()}</button>`;
+      }
+      return `<div class="card">
+        <h3>${escapeHtml(g.name)}</h3>
+        <p>${escapeHtml(g.description || '')}</p>
+        <p style="margin:0.75rem 0;"><strong>UGX ${Number(g.monthly_contribution).toLocaleString()}</strong> / month</p>
+        ${actionHtml}
+      </div>`;
+    }).join('');
+
+    document.querySelectorAll('.join-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const group = JSON.parse(btn.dataset.group);
+        btn.disabled = true; btn.textContent = 'Opening secure checkout...';
+        paySavingsJoinFee(group);
+      });
+    });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

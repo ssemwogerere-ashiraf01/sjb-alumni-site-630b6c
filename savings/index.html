@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Savings — SJB Association</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+<div id="app-nav"></div>
+<div id="savings-sidebar"></div>
+<div class="auth-wrap savings-content">
+  <div class="auth-card" style="text-align:center;">
+    <h2>Loading your savings...</h2>
+    <p class="subtitle">One moment.</p>
+  </div>
+</div>
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { mountSavingsSidebar } from '../assets/js/savings-sidebar.js';
+  import { requireApprovedMember } from '../assets/js/session-guard.js';
+
+  mountNav('savings');
+  mountFooter();
+  mountSavingsSidebar('dashboard');
+
+  const profile = await requireApprovedMember();
+  if (!profile) throw new Error('redirecting');
+
+  // Send active members straight to their group dashboard; everyone else
+  // to the group registration page — mirrors the logic already used on
+  // the main dashboard's "Savings" quick-access card.
+  const { data: activeGroups } = await supabase
+    .from('savings_group_members')
+    .select('group_id')
+    .eq('user_id', profile.id)
+    .eq('status', 'active')
+    .limit(1);
+
+  window.location.href = (activeGroups && activeGroups.length > 0) ? 'dashboard.html' : 'register.html';
+</script>
+</body>
+</html>

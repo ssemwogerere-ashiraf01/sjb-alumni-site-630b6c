@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Request Withdrawal — SJB Association Savings</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+<div id="app-nav"></div>
+<div id="savings-sidebar"></div>
+
+<div class="auth-wrap savings-content">
+  <div class="auth-card" style="max-width:460px;">
+    <h2>Request a withdrawal</h2>
+    <p class="subtitle" id="group-sub">Withdrawal requests are reviewed and approved by an admin before funds are disbursed — this keeps group savings safe.</p>
+    <div id="alert-box"></div>
+    <form id="withdraw-form">
+      <div class="form-group">
+        <label for="amount">Amount (UGX)</label>
+        <input type="number" id="amount" min="1000" step="500" required />
+        <small id="balance-hint" style="color:var(--text-muted);"></small>
+      </div>
+      <div class="form-group">
+        <label for="purpose">Purpose</label>
+        <input type="text" id="purpose" required placeholder="e.g. Emergency medical expense" />
+      </div>
+      <div class="form-group">
+        <label for="notes">Additional notes (optional)</label>
+        <input type="text" id="notes" />
+      </div>
+      <button type="submit" class="btn btn-gold btn-block" id="submit-btn">Submit Request</button>
+    </form>
+
+    <h3 style="margin-top:2rem;font-size:1.05rem;">Your recent requests</h3>
+    <div id="requests-list"></div>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { mountSavingsSidebar } from '../assets/js/savings-sidebar.js';
+  import { requireActiveSavingsGroup } from '../assets/js/savings-guard.js';
+  import '../assets/js/session-guard.js';
+
+  mountNav('savings');
+  mountFooter();
+
+  const groupId = new URLSearchParams(window.location.search).get('group');
+  mountSavingsSidebar('withdraw', groupId);
+  const result = await requireActiveSavingsGroup();
+  if (!result) throw new Error('redirecting');
+  const membership = result.memberships.find(m => m.group_id === groupId);
+  const alertBox = document.getElementById('alert-box');
+  if (!membership) { alertBox.innerHTML = `<div class="alert alert-error">You are not an active member of that group.</div>`; throw new Error('not a member'); }
+
+  const group = membership.savings_groups;
+  document.getElementById('group-sub').textContent = `${group.name}: requests are reviewed by an admin before funds are disbursed.`;
+
+  const { data: txns } = await supabase.from('savings_transactions').select('type, amount, status').eq('group_id', groupId).eq('user_id', result.session.user.id);
+  const balance = (txns || []).filter(t => t.type === 'contribution' && t.status === 'completed').reduce((s, t) => s + Number(t.amount), 0)
+    - (txns || []).filter(t => t.type === 'withdrawal' && t.status !== 'rejected').reduce((s, t) => s + Number(t.amount), 0);
+  document.getElementById('balance-hint').textContent = `Available balance: UGX ${balance.toLocaleString()}`;
+
+  document.getElementById('withdraw-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true; btn.textContent = 'Submitting...';
+
+    const amount = Number(document.getElementById('amount').value);
+    const purpose = document.getElementById('purpose').value.trim();
+    const notes = document.getElementById('notes').value.trim();
+
+    if (amount > balance) {
+      alertBox.innerHTML = `<div class="alert alert-error">Requested amount exceeds your available balance of UGX ${balance.toLocaleString()}.</div>`;
+      btn.disabled = false; btn.textContent = 'Submit Request';
+      return;
+    }
+
+    const { error } = await supabase.from('savings_transactions').insert({
+      group_id: groupId, user_id: result.session.user.id, type: 'withdrawal',
+      amount, purpose, notes, status: 'pending',
+    });
+
+    if (error) {
+      alertBox.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+      btn.disabled = false; btn.textContent = 'Submit Request';
+    } else {
+      alertBox.innerHTML = `<div class="alert alert-success">Withdrawal request submitted. You'll be notified once an admin reviews it.</div>`;
+      document.getElementById('withdraw-form').reset();
+      btn.disabled = false; btn.textContent = 'Submit Request';
+      loadRequests();
+    }
+  });
+
+  async function loadRequests() {
+    const { data: reqs } = await supabase
+      .from('savings_transactions').select('amount, purpose, status, created_at')
+      .eq('group_id', groupId).eq('user_id', result.session.user.id).eq('type', 'withdrawal')
+      .order('created_at', { ascending: false }).limit(5);
+    const list = document.getElementById('requests-list');
+    if (!reqs || reqs.length === 0) { list.innerHTML = `<p style="color:var(--text-muted);font-size:0.9rem;">No withdrawal requests yet.</p>`; return; }
+    list.innerHTML = reqs.map(r => `
+      <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid var(--border);font-size:0.88rem;">
+        <span>${escapeHtml(r.purpose)} — UGX ${Number(r.amount).toLocaleString()}</span>
+        <span style="font-weight:600;color:${r.status === 'completed' ? 'var(--forest)' : r.status === 'rejected' ? '#9c2b2b' : '#8a6100'};">${r.status}</span>
+      </div>`).join('');
+  }
+  loadRequests();
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

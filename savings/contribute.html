@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Contribute — SJB Association Savings</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+<script src="https://checkout.flutterwave.com/v3.js"></script>
+</head>
+<body>
+<div id="app-nav"></div>
+<div id="savings-sidebar"></div>
+
+<div class="auth-wrap savings-content">
+  <div class="auth-card" style="max-width:440px;text-align:center;">
+    <h2 id="group-title">Loading...</h2>
+    <p class="subtitle" id="month-label"></p>
+    <div id="alert-box"></div>
+    <button type="button" class="btn btn-gold btn-block" id="pay-btn" style="display:none;">Pay Monthly Contribution</button>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { mountSavingsSidebar } from '../assets/js/savings-sidebar.js';
+  import { paySavingsContribution } from '../assets/js/flutterwave.js';
+  import { requireActiveSavingsGroup } from '../assets/js/savings-guard.js';
+  import '../assets/js/session-guard.js';
+
+  mountNav('savings');
+  mountFooter();
+
+  const groupId = new URLSearchParams(window.location.search).get('group');
+  mountSavingsSidebar('contribute', groupId);
+  const alertBox = document.getElementById('alert-box');
+  if (!groupId) { alertBox.innerHTML = `<div class="alert alert-error">No group specified.</div>`; throw new Error('no group'); }
+
+  const result = await requireActiveSavingsGroup();
+  if (!result) throw new Error('redirecting');
+
+  const membership = result.memberships.find(m => m.group_id === groupId);
+  if (!membership) {
+    alertBox.innerHTML = `<div class="alert alert-error">You are not an active member of that group.</div>`;
+    throw new Error('not a member');
+  }
+  const group = membership.savings_groups;
+
+  const now = new Date();
+  const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  document.getElementById('group-title').textContent = group.name;
+  document.getElementById('month-label').textContent = `Contribution for ${monthLabel} — fixed at UGX ${Number(group.monthly_contribution).toLocaleString()}`;
+
+  const { data: existing } = await supabase
+    .from('savings_transactions')
+    .select('status')
+    .eq('group_id', groupId).eq('user_id', result.session.user.id)
+    .eq('type', 'contribution').eq('month_year', monthYear)
+    .maybeSingle();
+
+  const payBtn = document.getElementById('pay-btn');
+  if (existing?.status === 'completed') {
+    alertBox.innerHTML = `<div class="alert alert-success">You've already contributed for ${monthLabel}. Thank you!</div>`;
+  } else if (existing?.status === 'pending') {
+    alertBox.innerHTML = `<div class="alert alert-error">A payment for this month is already processing. If it doesn't confirm within a few minutes, contact an admin.</div>`;
+  } else {
+    payBtn.style.display = 'block';
+    payBtn.addEventListener('click', async () => {
+      payBtn.disabled = true; payBtn.textContent = 'Opening secure checkout...';
+      await paySavingsContribution({ group, monthYear, amount: Number(group.monthly_contribution), currency: group.currency || 'UGX' });
+      payBtn.disabled = false; payBtn.textContent = 'Pay Monthly Contribution';
+    });
+  }
+</script>
+</body>
+</html>

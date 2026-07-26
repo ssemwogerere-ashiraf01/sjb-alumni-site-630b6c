@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Savings History — SJB Association</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+<style>
+  table { width:100%; border-collapse: collapse; background:var(--paper); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
+  th, td { text-align:left; padding:0.75rem 1rem; border-bottom:1px solid var(--border); font-size:0.9rem; }
+  th { background:var(--ink-navy); color:#fff; font-weight:600; }
+  .status-pill { padding:0.2rem 0.6rem; border-radius:20px; font-size:0.78rem; font-weight:600; }
+  .status-completed { background:#eaf4ec; color:#1f4b3f; }
+  .status-pending { background:#fdf3e0; color:#8a6100; }
+  .status-rejected { background:#fdecec; color:#9c2b2b; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+<div id="savings-sidebar"></div>
+
+<div class="section savings-content">
+  <div class="section-head"><span class="eyebrow">Savings</span><h2 id="group-title">History</h2></div>
+  <div id="content"></div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { mountSavingsSidebar } from '../assets/js/savings-sidebar.js';
+  import { requireActiveSavingsGroup } from '../assets/js/savings-guard.js';
+  import '../assets/js/session-guard.js';
+
+  mountNav('savings');
+  mountFooter();
+
+  const groupId = new URLSearchParams(window.location.search).get('group');
+  mountSavingsSidebar('history', groupId);
+  const result = await requireActiveSavingsGroup();
+  if (!result) throw new Error('redirecting');
+  const membership = result.memberships.find(m => m.group_id === groupId);
+  const content = document.getElementById('content');
+  if (!membership) { content.innerHTML = `<div class="alert alert-error">You are not an active member of that group.</div>`; throw new Error('not a member'); }
+
+  document.getElementById('group-title').textContent = `${membership.savings_groups.name} — History`;
+
+  const { data: txns } = await supabase
+    .from('savings_transactions')
+    .select('type, amount, status, month_year, purpose, created_at')
+    .eq('group_id', groupId).eq('user_id', result.session.user.id)
+    .order('created_at', { ascending: false });
+
+  if (!txns || txns.length === 0) {
+    content.innerHTML = `<p style="text-align:center;color:var(--text-muted);">No transactions yet.</p>`;
+  } else {
+    content.innerHTML = `<table>
+      <thead><tr><th>Date</th><th>Type</th><th>Period / Purpose</th><th>Amount (UGX)</th><th>Status</th></tr></thead>
+      <tbody>${txns.map(t => `
+        <tr>
+          <td>${new Date(t.created_at).toLocaleDateString()}</td>
+          <td>${t.type === 'contribution' ? 'Contribution' : 'Withdrawal'}</td>
+          <td>${t.type === 'contribution' ? (t.month_year ? new Date(t.month_year).toLocaleString('default', { month: 'long', year: 'numeric' }) : '—') : escapeHtml(t.purpose || '—')}</td>
+          <td>${Number(t.amount).toLocaleString()}</td>
+          <td><span class="status-pill status-${t.status}">${t.status}</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

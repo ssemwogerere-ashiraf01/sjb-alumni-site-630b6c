@@ -55,15 +55,12 @@
 
     <!-- Stats Summary Row -->
     <div class="stat-grid" id="stat-row"></div>
-<!-- TAB 1: MEMBERS -->
-<div class="tab-panel active" id="tab-members">
-  
-  <!-- Add User Card -->
-  <div class="card" style="margin-bottom: 1.5rem;">
-    <div style="display:flex; justify-space-between:var(--border); align-items:center; margin-bottom:1rem;">
-      <h3 style="margin:0;">Add New Member</h3>
-      <button class="mini-btn good" id="toggle-add-user-btn">+ Add User</button>
-    </div>
+<!-- Add New Member (always visible, independent of which tab is active) -->
+<div class="card" style="margin-bottom: 1.5rem;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+    <h3 style="margin:0;">Add New Member</h3>
+    <button class="mini-btn good" id="toggle-add-user-btn">+ Add User</button>
+  </div>
 
     <form id="add-user-form" style="display:none; background:#f8fafc; padding:1.25rem; border-radius:var(--radius); border:1px solid var(--border);">
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0.85rem;">
@@ -139,11 +136,7 @@
     </form>
   </div>
 
-  <!-- Existing Member Table Card -->
-  <div class="card">
-     ...
-
-    <!-- Tab Buttons -->
+  <!-- Tab Buttons -->
     <div class="tab-nav">
       <button class="tab-btn active" data-tab="members">Members</button>
       <button class="tab-btn" data-tab="content">Content Management</button>
@@ -687,6 +680,7 @@
       const isEdit = !!editId;
       const formData = new FormData(form);
       const payload = {};
+      const notifyKinds = new Set(['news', 'events', 'jobs', 'forumTopics', 'announcements']);
 
       try {
         const mediaType = formData.get('media_type') || 'image';
@@ -776,12 +770,28 @@
 
         const query = isEdit
           ? supabase.from(table).update(payload).eq('id', editId)
-          : supabase.from(table).insert(payload);
+          : supabase.from(table).insert(payload).select().single();
 
-        const { error } = await query;
+        const { data, error } = await query;
         if (error) { flash(error.message, 'error'); return; }
 
         flash(isEdit ? 'Item updated.' : 'Item created.');
+
+        if (!isEdit && data && notifyKinds.has(kind)) {
+          try {
+            const { error: notifyError } = await supabase.functions.invoke('send-newsletter', {
+              body: { table, record: data },
+            });
+            if (notifyError) {
+              console.warn('Newsletter notification failed:', notifyError);
+              flash('Post saved, but newsletter resend failed.', 'error');
+            }
+          } catch (notifyError) {
+            console.warn('Newsletter notification failed:', notifyError);
+            flash('Post saved, but newsletter resend failed.', 'error');
+          }
+        }
+
         clearContentForm(kind);
         loadContentManagement();
       } catch (err) {
