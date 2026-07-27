@@ -45,17 +45,13 @@ Deno.serve(async (req) => {
     // Confirm the caller is an admin in your own profiles table.
     const { data: callerProfile, error: profileLookupErr } = await callerClient
       .from("profiles")
-      .select("role")
+      .select("role, is_super_admin")
       .eq("id", callerUser.id)
       .single();
 
-    if (profileLookupErr || callerProfile?.role !== "admin") {
+    if (profileLookupErr || (callerProfile?.role !== "admin" && !callerProfile?.is_super_admin)) {
       return jsonResponse({ error: "Only admins can create users." }, 403);
     }
-
-    // From here on, use a full service-role client (bypasses RLS) to do the
-    // privileged work: create the auth user, then insert the profile row.
-    const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     const body = await req.json();
     const {
@@ -72,9 +68,19 @@ Deno.serve(async (req) => {
       feePaid,
     } = body;
 
+    // Making a new account an admin is a super-admin-only privilege —
+    // a regular admin can still create members/leaders, just not admins.
+    if (role === "admin" && !callerProfile?.is_super_admin) {
+      return jsonResponse({ error: "Only the super admin can create admin accounts." }, 403);
+    }
+
     if (!email || !password || !fullName) {
       return jsonResponse({ error: "email, password, and fullName are required." }, 400);
     }
+
+    // From here on, use a full service-role client (bypasses RLS) to do the
+    // privileged work: create the auth user, then insert the profile row.
+    const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     // 1. Create the auth user directly (no signUp session-swap, no email needed).
     const { data: created, error: createErr } = await adminClient.auth.admin.createUser({

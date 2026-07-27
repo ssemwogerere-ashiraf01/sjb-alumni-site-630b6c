@@ -1,6 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 Deno.serve(async (req) => {
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, content-type",
+  };
+
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   try {
     const payload = await req.json();
     const { record, table } = payload;
@@ -16,7 +25,7 @@ Deno.serve(async (req) => {
 
     // Get active subscribers
     const { data: subscribers } = await supabase.from("subscribers").select("email");
-    const emailList = subscribers?.map((s) => s.email) || [];
+    const emailList = [...new Set((subscribers?.map((s) => s.email) || []).filter(Boolean))];
 
     if (emailList.length === 0) {
       return new Response(JSON.stringify({ message: "No subscribers to send to." }), { status: 200 });
@@ -25,7 +34,7 @@ Deno.serve(async (req) => {
     let subject = "New Update - St. Josephine Bakhita Alumni";
     let title = record.title || "New Posting";
     let excerpt = record.content || record.description || "Check out the latest details on our website.";
-    let pageUrl = "https://sjb-alumni.vercel.app/index.html";
+    let pageUrl = "https://sjb-alumni-site-630b6c-3hj7.vercel.app/index.html";
 
     if (table === "jobs") {
       subject = `💼 Job Alert: ${title} (${record.company || 'Company Confidential'})`;
@@ -35,13 +44,23 @@ Deno.serve(async (req) => {
       pageUrl = `https://sjb-alumni-site-630b6c-3hj7.vercel.app/events.html?id=${record.id}`;
     } else if (table === "forum_topics") {
       subject = `💬 New Discussion Topic: ${title}`;
-      pageUrl = `https://sjb-alumni-site-630b6c-3hj7.vercel.app/forum/index.html?id=${record.id}`;
+      pageUrl = `https://sjb-alumni-site-630b6c-3hj7.vercel.app/forum/index.html?topic=${record.id}`;
     } else if (table === "news") {
       subject = `📰 News Release: ${title}`;
       pageUrl = `https://sjb-alumni-site-630b6c-3hj7.vercel.app/news.html?id=${record.id}`;
+    } else if (table === "savings_announcements") {
+      subject = `📣 Savings Announcement: ${title}`;
+      pageUrl = `https://sjb-alumni-site-630b6c-3hj7.vercel.app/savings/dashboard.html`;
     }
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
+
+    if (!resendApiKey) {
+      return new Response(JSON.stringify({ error: "Missing RESEND_API_KEY." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -63,8 +82,14 @@ Deno.serve(async (req) => {
       }),
     });
 
-    return new Response(JSON.stringify({ success: true }), { status: 200 });
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
