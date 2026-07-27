@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Feedback Forms — Admin</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+<style>
+  :root {
+    --forest: #1b4332;
+    --gold: #d4af37;
+    --border: #e2e8f0;
+    --radius: 8px;
+    --text-muted: #64748b;
+  }
+  .admin-container { padding: 2rem; max-width: 1100px; margin: 0 auto; }
+  .tab-nav { display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border); margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .tab-btn { padding: 0.6rem 1.2rem; border: none; background: none; font-weight: 600; cursor: pointer; color: var(--text-muted); border-bottom: 3px solid transparent; }
+  .tab-btn.active { color: var(--forest); border-bottom-color: var(--gold); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .form-group { margin-bottom: 1rem; }
+  .form-group label { display: block; font-weight: 600; margin-bottom: 0.35rem; font-size: 0.88rem; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; }
+
+  .mini-btn { padding: 0.35rem 0.7rem; font-size: 0.8rem; border-radius: 4px; border: none; cursor: pointer; font-weight: 600; }
+  .mini-btn.good { background: var(--forest); color: #fff; }
+  .mini-btn.bad { background: #b91c1c; color: #fff; }
+  .mini-btn.neutral { background: #eef2f7; color: var(--text-muted); }
+
+  .pill { padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+  .pill-active { background: #dcfce7; color: #15803d; }
+  .pill-inactive { background: #f1f5f9; color: #64748b; }
+
+  .form-list-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.25rem; margin-bottom: 1rem; }
+  .form-list-header { display:flex; justify-content:space-between; align-items:flex-start; gap: 1rem; }
+  .form-list-header h3 { margin: 0 0 0.25rem; font-size: 1.05rem; }
+  .form-list-header p { margin: 0; color: var(--text-muted); font-size: 0.88rem; }
+  .form-list-actions { display:flex; gap:0.4rem; flex-wrap: wrap; white-space: nowrap; }
+
+  .question-row {
+    display:flex; justify-content:space-between; align-items:center; gap:1rem;
+    padding: 0.6rem 0.8rem; background:#f8fafc; border-radius: 6px; margin-top: 0.5rem; font-size: 0.88rem;
+  }
+  .question-row .q-meta { color: var(--text-muted); font-size: 0.78rem; }
+  .question-editor { margin-top: 1rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
+
+  .add-question-form { display:grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 0.75rem; align-items: end; }
+
+  /* --- Results --- */
+  .bar-row { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.5rem; font-size:0.85rem; }
+  .bar-label { flex: 0 0 160px; color: var(--ink-navy, #16233a); }
+  .bar-track { flex:1; background:#f1f5f9; border-radius: 4px; height: 18px; overflow:hidden; }
+  .bar-fill { background: var(--forest); height:100%; border-radius:4px; }
+  .bar-count { flex: 0 0 60px; text-align:right; color: var(--text-muted); }
+  .comment-item { padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 0.5rem; font-size: 0.9rem; }
+  .comment-item + .comment-item { margin-top: 0.5rem; }
+  .empty-note { color: var(--text-muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<main class="admin-container">
+  <h2>Feedback Forms</h2>
+  <p style="color:var(--text-muted); margin-top:-0.5rem;">Build usability/performance surveys and review what members submit.</p>
+  <p id="super-admin-note" style="display:none; color:var(--text-muted); font-size:0.85rem;">Deactivating a form, deleting a form, and removing questions are Super Admin actions.</p>
+  <div id="alert-box"></div>
+
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="build">Manage Forms</button>
+    <button class="tab-btn" data-tab="results">View Results</button>
+  </div>
+
+  <!-- TAB: BUILD -->
+  <div class="tab-panel active" id="tab-build">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h3 style="margin:0;">Create New Form</h3>
+        <button class="mini-btn good" id="toggle-new-form-btn">+ New Form</button>
+      </div>
+      <form id="new-form-form" style="display:none;">
+        <div class="form-group">
+          <label>Form Title *</label>
+          <input type="text" id="nf-title" required placeholder="e.g. Website Usability Survey — July 2026" />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="nf-description" rows="2" placeholder="Shown to members above the questions."></textarea>
+        </div>
+        <button type="submit" class="mini-btn good">Create</button>
+        <button type="button" class="mini-btn neutral" id="cancel-new-form-btn">Cancel</button>
+      </form>
+    </div>
+
+    <div id="forms-list"><p class="empty-note">Loading forms...</p></div>
+  </div>
+
+  <!-- TAB: RESULTS -->
+  <div class="tab-panel" id="tab-results">
+    <div class="card">
+      <div class="form-group" style="margin-bottom:0;">
+        <label>Select a form</label>
+        <select id="results-form-select"><option value="">Loading forms...</option></select>
+      </div>
+    </div>
+    <div id="results-container"></div>
+  </div>
+</main>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { requireAdmin } from '../assets/js/admin-guard.js';
+
+  mountNav('admin');
+  mountFooter();
+
+  const admin = await requireAdmin();
+  if (!admin) throw new Error('redirecting');
+
+  const isSuperAdmin = !!admin.is_super_admin;
+  if (!isSuperAdmin) {
+    document.getElementById('super-admin-note').style.display = 'block';
+  }
+
+  const alertBox = document.getElementById('alert-box');
+  const QUESTION_TYPES = [
+    { value: 'rating_5', label: 'Rating (1–5)' },
+    { value: 'single_choice', label: 'Single choice' },
+    { value: 'multiple_choice', label: 'Multiple choice' },
+    { value: 'short_text', label: 'Short text (optional comment)' },
+  ];
+
+  let forms = [];
+
+  // ---------- Tabs ----------
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+      if (btn.dataset.tab === 'results') populateResultsSelect();
+    });
+  });
+
+  // ---------- New form toggle ----------
+  const newFormForm = document.getElementById('new-form-form');
+  document.getElementById('toggle-new-form-btn').addEventListener('click', () => {
+    newFormForm.style.display = newFormForm.style.display === 'none' ? 'block' : 'none';
+  });
+  document.getElementById('cancel-new-form-btn').addEventListener('click', () => {
+    newFormForm.reset();
+    newFormForm.style.display = 'none';
+  });
+
+  newFormForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('nf-title').value.trim();
+    const description = document.getElementById('nf-description').value.trim();
+    if (!title) return;
+
+    const { error } = await supabase.from('feedback_forms').insert({
+      title, description, created_by: admin.id,
+    });
+
+    if (error) {
+      flash(`Could not create form: ${error.message}`, 'error');
+      return;
+    }
+    newFormForm.reset();
+    newFormForm.style.display = 'none';
+    flash('Form created. Add questions below.', 'success');
+    await loadForms();
+  });
+
+  await loadForms();
+
+  async function loadForms() {
+    const { data, error } = await supabase
+      .from('feedback_forms')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      flash(`Could not load forms: ${error.message}`, 'error');
+      return;
+    }
+    forms = data || [];
+    renderFormsList();
+  }
+
+  function renderFormsList() {
+    const container = document.getElementById('forms-list');
+    if (!forms.length) {
+      container.innerHTML = `<p class="empty-note">No forms yet — create one above.</p>`;
+      return;
+    }
+
+    container.innerHTML = forms.map(f => `
+      <div class="form-list-item" data-form-id="${f.id}">
+        <div class="form-list-header">
+          <div>
+            <h3>${escapeHtml(f.title)} <span class="pill ${f.is_active ? 'pill-active' : 'pill-inactive'}">${f.is_active ? 'Active' : 'Inactive'}</span></h3>
+            <p>${escapeHtml(f.description || '')}</p>
+          </div>
+          <div class="form-list-actions">
+            ${isSuperAdmin ? `<button class="mini-btn ${f.is_active ? 'neutral' : 'good'}" data-action="toggle" data-form-id="${f.id}">${f.is_active ? 'Deactivate' : 'Activate'}</button>` : ''}
+            <button class="mini-btn neutral" data-action="questions" data-form-id="${f.id}">Manage Questions</button>
+            ${isSuperAdmin ? `<button class="mini-btn bad" data-action="delete" data-form-id="${f.id}">Delete</button>` : ''}
+          </div>
+        </div>
+        <div class="question-editor" id="qeditor-${f.id}" style="display:none;"></div>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('button[data-action="toggle"]').forEach(btn => {
+      btn.addEventListener('click', () => toggleActive(btn.dataset.formId));
+    });
+    container.querySelectorAll('button[data-action="delete"]').forEach(btn => {
+      btn.addEventListener('click', () => deleteForm(btn.dataset.formId));
+    });
+    container.querySelectorAll('button[data-action="questions"]').forEach(btn => {
+      btn.addEventListener('click', () => toggleQuestionEditor(btn.dataset.formId, btn));
+    });
+  }
+
+  async function toggleActive(formId) {
+    const form = forms.find(f => f.id === formId);
+    const { error } = await supabase.from('feedback_forms').update({ is_active: !form.is_active }).eq('id', formId);
+    if (error) return flash(`Could not update form: ${error.message}`, 'error');
+    await loadForms();
+  }
+
+  async function deleteForm(formId) {
+    if (!confirm('Delete this form? All its questions and member responses will be permanently deleted.')) return;
+    const { error } = await supabase.from('feedback_forms').delete().eq('id', formId);
+    if (error) return flash(`Could not delete form: ${error.message}`, 'error');
+    flash('Form deleted.', 'success');
+    await loadForms();
+  }
+
+  async function toggleQuestionEditor(formId, btn) {
+    const editor = document.getElementById(`qeditor-${formId}`);
+    const isOpen = editor.style.display !== 'none';
+    // Close any other open editors first
+    document.querySelectorAll('.question-editor').forEach(e => { e.style.display = 'none'; });
+    if (isOpen) { btn.textContent = 'Manage Questions'; return; }
+
+    editor.style.display = 'block';
+    btn.textContent = 'Hide Questions';
+    await renderQuestionEditor(formId, editor);
+  }
+
+  async function renderQuestionEditor(formId, editor) {
+    editor.innerHTML = `<p class="empty-note">Loading questions...</p>`;
+    const { data: questions, error } = await supabase
+      .from('feedback_questions')
+      .select('*')
+      .eq('form_id', formId)
+      .order('sort_order', { ascending: true });
+
+    if (error) {
+      editor.innerHTML = `<p class="empty-note">Could not load questions: ${escapeHtml(error.message)}</p>`;
+      return;
+    }
+
+    const rowsHtml = (questions || []).map((q, i) => `
+      <div class="question-row">
+        <div>
+          <strong>${i + 1}. ${escapeHtml(q.question_text)}</strong>
+          <div class="q-meta">
+            ${QUESTION_TYPES.find(t => t.value === q.question_type)?.label || q.question_type}
+            ${q.is_required ? ' · required' : ' · optional'}
+            ${Array.isArray(q.options) ? ' · ' + q.options.length + ' options' : ''}
+          </div>
+        </div>
+        ${isSuperAdmin ? `<button class="mini-btn bad" data-delete-question="${q.id}">Remove</button>` : ''}
+      </div>
+    `).join('') || `<p class="empty-note">No questions yet — add one below.</p>`;
+
+    editor.innerHTML = `
+      ${rowsHtml}
+      <form class="add-question-form" id="add-question-form-${formId}" style="margin-top:1rem;">
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label>Question text *</label>
+          <input type="text" id="aq-text-${formId}" required placeholder="e.g. How easy was it to find what you needed?" />
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select id="aq-type-${formId}">
+            ${QUESTION_TYPES.map(t => `<option value="${t.value}">${t.label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group" id="aq-options-wrap-${formId}" style="grid-column: 1 / -1;">
+          <label>Options (one per line)</label>
+          <textarea id="aq-options-${formId}" rows="3" placeholder="Very easy&#10;Easy&#10;Difficult&#10;Very difficult"></textarea>
+        </div>
+        <div class="form-group" id="aq-maxlen-wrap-${formId}" style="display:none;">
+          <label>Max characters</label>
+          <input type="number" id="aq-maxlen-${formId}" value="300" min="20" max="500" />
+        </div>
+        <div class="form-group" style="display:flex; align-items:center; gap:0.5rem;">
+          <input type="checkbox" id="aq-required-${formId}" checked style="width:auto;" />
+          <label for="aq-required-${formId}" style="margin-bottom:0;">Required</label>
+        </div>
+        <div class="form-group">
+          <button type="submit" class="mini-btn good">Add Question</button>
+        </div>
+      </form>
+    `;
+
+    const typeSelect = document.getElementById(`aq-type-${formId}`);
+    const optionsWrap = document.getElementById(`aq-options-wrap-${formId}`);
+    const maxlenWrap = document.getElementById(`aq-maxlen-wrap-${formId}`);
+    const syncFieldVisibility = () => {
+      const isChoice = typeSelect.value === 'single_choice' || typeSelect.value === 'multiple_choice';
+      optionsWrap.style.display = isChoice ? 'block' : 'none';
+      maxlenWrap.style.display = typeSelect.value === 'short_text' ? 'block' : 'none';
+    };
+    typeSelect.addEventListener('change', syncFieldVisibility);
+    syncFieldVisibility();
+
+    editor.querySelectorAll('button[data-delete-question]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Remove this question? Any answers already given for it will be deleted too.')) return;
+        const { error } = await supabase.from('feedback_questions').delete().eq('id', btn.dataset.deleteQuestion);
+        if (error) return flash(`Could not remove question: ${error.message}`, 'error');
+        await renderQuestionEditor(formId, editor);
+      });
+    });
+
+    document.getElementById(`add-question-form-${formId}`).addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const questionText = document.getElementById(`aq-text-${formId}`).value.trim();
+      const questionType = typeSelect.value;
+      const isRequired = document.getElementById(`aq-required-${formId}`).checked;
+      const nextSortOrder = (questions || []).length;
+
+      const payload = {
+        form_id: formId,
+        question_text: questionText,
+        question_type: questionType,
+        is_required: isRequired,
+        sort_order: nextSortOrder,
+      };
+
+      if (questionType === 'single_choice' || questionType === 'multiple_choice') {
+        const options = document.getElementById(`aq-options-${formId}`).value
+          .split('\n').map(s => s.trim()).filter(Boolean);
+        if (options.length < 2) return flash('Add at least two options for a choice question.', 'error');
+        payload.options = options;
+      }
+      if (questionType === 'short_text') {
+        payload.max_length = parseInt(document.getElementById(`aq-maxlen-${formId}`).value, 10) || 300;
+      }
+
+      const { error } = await supabase.from('feedback_questions').insert(payload);
+      if (error) return flash(`Could not add question: ${error.message}`, 'error');
+      await renderQuestionEditor(formId, editor);
+    });
+  }
+
+  // ---------- Results tab ----------
+  async function populateResultsSelect() {
+    const select = document.getElementById('results-form-select');
+    select.innerHTML = `<option value="">Choose a form...</option>` +
+      forms.map(f => `<option value="${f.id}">${escapeHtml(f.title)}</option>`).join('');
+    select.onchange = () => loadResults(select.value);
+  }
+
+  async function loadResults(formId) {
+    const container = document.getElementById('results-container');
+    if (!formId) { container.innerHTML = ''; return; }
+    container.innerHTML = `<p class="empty-note">Loading results...</p>`;
+
+    const [{ data: questions, error: qErr }, { data: responses, error: rErr }] = await Promise.all([
+      supabase.from('feedback_questions').select('*').eq('form_id', formId).order('sort_order', { ascending: true }),
+      supabase.from('feedback_responses').select('id, submitted_email, submitted_username').eq('form_id', formId),
+    ]);
+
+    if (qErr || rErr) {
+      container.innerHTML = `<p class="empty-note">Could not load results: ${escapeHtml((qErr || rErr).message)}</p>`;
+      return;
+    }
+
+    const responseIds = (responses || []).map(r => r.id);
+    const totalResponses = responseIds.length;
+
+    if (!totalResponses) {
+      container.innerHTML = `<div class="card"><p class="empty-note">No responses yet for this form.</p></div>`;
+      return;
+    }
+
+    // response_id -> who submitted it, so answers/comments can be attributed
+    const identityByResponseId = new Map(
+      (responses || []).map(r => [r.id, {
+        email: r.submitted_email || '—',
+        username: r.submitted_username || '—',
+      }])
+    );
+
+    const { data: answers, error: aErr } = await supabase
+      .from('feedback_answers')
+      .select('*')
+      .in('response_id', responseIds);
+
+    if (aErr) {
+      container.innerHTML = `<p class="empty-note">Could not load answers: ${escapeHtml(aErr.message)}</p>`;
+      return;
+    }
+
+    container.innerHTML = `<div class="card"><strong>${totalResponses}</strong> response${totalResponses === 1 ? '' : 's'} so far</div>` +
+      renderRespondentsCard(responses || []) +
+      (questions || []).map(q => renderQuestionResults(q, answers || [], identityByResponseId)).join('');
+  }
+
+  function renderRespondentsCard(responses) {
+    const rows = responses
+      .map(r => `
+        <div class="bar-row" style="justify-content:space-between;">
+          <span><strong>${escapeHtml(r.submitted_username || '—')}</strong> &lt;${escapeHtml(r.submitted_email || '—')}&gt;</span>
+        </div>
+      `).join('');
+    return `
+      <div class="card">
+        <h4 style="margin:0 0 0.75rem;">Respondents</h4>
+        ${rows || '<p class="empty-note">No identity info recorded.</p>'}
+      </div>
+    `;
+  }
+
+  function renderQuestionResults(q, allAnswers, identityByResponseId) {
+    const answersForQ = allAnswers.filter(a => a.question_id === q.id);
+
+    if (q.question_type === 'rating_5') {
+      const counts = [1,2,3,4,5].map(n => answersForQ.filter(a => a.answer_rating === n).length);
+      const total = counts.reduce((a,b) => a+b, 0);
+      const avg = total ? (answersForQ.reduce((s,a) => s + a.answer_rating, 0) / total).toFixed(2) : '—';
+      return `
+        <div class="card">
+          <h4 style="margin:0 0 0.75rem;">${escapeHtml(q.question_text)} <span style="color:var(--text-muted); font-weight:400; font-size:0.85rem;">(avg ${avg}/5, ${total} answers)</span></h4>
+          ${[1,2,3,4,5].map((n,i) => barRow(`${n} star${n>1?'s':''}`, counts[i], total)).join('')}
+        </div>
+      `;
+    }
+
+    if (q.question_type === 'single_choice' || q.question_type === 'multiple_choice') {
+      const options = Array.isArray(q.options) ? q.options : [];
+      const counts = options.map(opt => {
+        if (q.question_type === 'single_choice') {
+          return answersForQ.filter(a => a.answer_choice === opt).length;
+        }
+        return answersForQ.filter(a => Array.isArray(a.answer_choices) && a.answer_choices.includes(opt)).length;
+      });
+      const total = q.question_type === 'single_choice' ? answersForQ.length : Math.max(...counts, 1);
+      return `
+        <div class="card">
+          <h4 style="margin:0 0 0.75rem;">${escapeHtml(q.question_text)} <span style="color:var(--text-muted); font-weight:400; font-size:0.85rem;">(${answersForQ.length} answers)</span></h4>
+          ${options.map((opt, i) => barRow(opt, counts[i], total)).join('')}
+        </div>
+      `;
+    }
+
+    if (q.question_type === 'short_text') {
+      const commentAnswers = answersForQ.filter(a => a.answer_text);
+      return `
+        <div class="card">
+          <h4 style="margin:0 0 0.75rem;">${escapeHtml(q.question_text)} <span style="color:var(--text-muted); font-weight:400; font-size:0.85rem;">(${commentAnswers.length} comment${commentAnswers.length === 1 ? '' : 's'})</span></h4>
+          ${commentAnswers.length ? commentAnswers.map(a => {
+            const who = identityByResponseId.get(a.response_id);
+            return `
+              <div class="comment-item">
+                <div>${escapeHtml(a.answer_text)}</div>
+                <div style="margin-top:0.35rem; font-size:0.75rem; color:var(--text-muted);">
+                  — ${escapeHtml(who?.username || '—')} &lt;${escapeHtml(who?.email || '—')}&gt;
+                </div>
+              </div>
+            `;
+          }).join('') : '<p class="empty-note">No comments left for this question.</p>'}
+        </div>
+      `;
+    }
+
+    return '';
+  }
+
+  function barRow(label, count, total) {
+    const pct = total ? Math.round((count / total) * 100) : 0;
+    return `
+      <div class="bar-row">
+        <div class="bar-label">${escapeHtml(label)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%;"></div></div>
+        <div class="bar-count">${count}</div>
+      </div>
+    `;
+  }
+
+  function flash(msg, type) {
+    alertBox.innerHTML = `<div class="alert alert-${type}">${escapeHtml(msg)}</div>`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => { alertBox.innerHTML = ''; }, 6000);
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

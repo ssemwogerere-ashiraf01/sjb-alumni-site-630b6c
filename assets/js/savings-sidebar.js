@@ -36,7 +36,7 @@ export function mountSavingsSidebar(activeKey, groupId) {
       </div>
       <nav class="savings-rail-nav">
         ${links.map(l => `
-          <a href="${l.href}" class="savings-rail-link ${activeKey === l.key ? 'active' : ''}" title="${l.label}">
+          <a href="${l.href}" class="savings-rail-link ${activeKey === l.key ? 'active' : ''}" title="${l.label}" ${activeKey === l.key ? 'aria-current="page"' : ''}>
             <span class="savings-rail-icon">${l.icon}</span>
             <span class="savings-rail-label">${l.label}</span>
           </a>

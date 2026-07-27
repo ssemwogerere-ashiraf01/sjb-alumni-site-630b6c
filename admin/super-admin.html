@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Super Admin Dashboard</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+<style>
+  :root {
+    --forest: #1b4332;
+    --gold: #d4af37;
+    --border: #e2e8f0;
+    --radius: 8px;
+    --text-muted: #64748b;
+  }
+  .admin-container { padding: 2rem; max-width: 1100px; margin: 0 auto; }
+  .super-header {
+    background: linear-gradient(135deg, #1b4332, #16233a);
+    color: #fff; border-radius: var(--radius); padding: 1.75rem 2rem; margin-bottom: 1.5rem;
+  }
+  .super-header h2 { margin: 0 0 0.35rem; }
+  .super-header p { margin: 0; color: #d9e2dc; font-size: 0.9rem; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .stat-box { background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem; text-align: center; }
+  .stat-box strong { display: block; font-size: 1.7rem; color: var(--forest); }
+  .stat-box span { font-size: 0.8rem; color: var(--text-muted); }
+
+  .card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { color: var(--text-muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  .pill { padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+  .pill-admin { background: #fff7e6; color: #92720c; }
+  .pill-leader { background: #e0e7ff; color: #3730a3; }
+  .pill-member { background: #f1f5f9; color: #64748b; }
+  .pill-super { background: var(--forest); color: #fff; }
+
+  .mini-btn { padding: 0.35rem 0.7rem; font-size: 0.8rem; border-radius: 4px; border: none; cursor: pointer; font-weight: 600; }
+  .mini-btn.good { background: var(--forest); color: #fff; }
+  .mini-btn.bad { background: #b91c1c; color: #fff; }
+  .mini-btn.neutral { background: #eef2f7; color: var(--text-muted); }
+
+  .role-row { display: flex; gap: 0.4rem; align-items: center; }
+  .role-row select { padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 0.82rem; }
+  .empty-note { color: var(--text-muted); font-size: 0.9rem; }
+
+  .tab-nav { display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border); margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .tab-btn { padding: 0.6rem 1.2rem; border: none; background: none; font-weight: 600; cursor: pointer; color: var(--text-muted); border-bottom: 3px solid transparent; }
+  .tab-btn.active { color: var(--forest); border-bottom-color: var(--gold); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .pill-active, .pill-approved { background: #dcfce7; color: #15803d; }
+  .pill-rejected, .pill-hidden { background: #fee2e2; color: #b91c1c; }
+  .pill-pending { background: #fef9c3; color: #a16207; }
+
+  .form-group { margin-bottom: 1rem; }
+  .form-group label { display: block; font-weight: 600; margin-bottom: 0.35rem; font-size: 0.88rem; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; }
+  .action-select { padding: 0.35rem; border-radius: 4px; border: 1px solid var(--border); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<main class="admin-container">
+  <div class="super-header">
+    <h2>Super Admin Dashboard</h2>
+    <p>Role changes, permanent account deletion, and every delete/update action across posts, savings, elections, approvals, financials, and feedback forms are exclusive to this dashboard — regular admins can only create new records and handle day-to-day member approvals.</p>
+  </div>
+
+  <div id="alert-box"></div>
+  <div class="stat-grid" id="stat-row"></div>
+
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="members">Members</button>
+    <button class="tab-btn" data-tab="content">Content</button>
+    <button class="tab-btn" data-tab="savings">Savings Groups</button>
+    <button class="tab-btn" data-tab="elections">Elections</button>
+    <button class="tab-btn" data-tab="financials">Approvals &amp; Financials</button>
+    <button class="tab-btn" data-tab="feedback">Feedback Forms</button>
+  </div>
+
+  <!-- TAB: MEMBERS -->
+  <div class="tab-panel active" id="tab-members">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <h3 style="margin:0;">All Members</h3>
+      <input type="text" id="member-search" placeholder="Search name or email..." style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:4px; width:240px;" />
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Change Role To</th>
+            <th>Delete</th>
+          </tr>
+        </thead>
+        <tbody id="members-tbody"><tr><td colspan="5" class="empty-note">Loading members...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  </div>
+
+  <!-- TAB: CONTENT -->
+  <div class="tab-panel" id="tab-content">
+    <p class="empty-note">Publishing/hiding and deleting existing posts happens here. Creating new posts is still done from the regular Admin Dashboard.</p>
+    <div id="content-sections"></div>
+  </div>
+
+  <!-- TAB: SAVINGS GROUPS -->
+  <div class="tab-panel" id="tab-savings">
+    <div class="card">
+      <h3 style="margin-top:0;">Savings Groups</h3>
+      <p class="empty-note">New groups are created from the regular Admin Dashboard. Editing amounts, activating/deactivating, and deleting a group happens here.</p>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Name</th><th>Monthly</th><th>Join Fee</th><th>Max Members</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="sa-groups-tbody"><tr><td colspan="6" class="empty-note">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: ELECTIONS -->
+  <div class="tab-panel" id="tab-elections">
+    <div class="card">
+      <h3 style="margin-top:0;">Elections</h3>
+      <p class="empty-note">New elections are created from the regular Admin Dashboard. Editing dates/status, approving candidates, closing an election (which auto-promotes winners to Leadership), and deleting happens here.</p>
+      <div id="sa-elections-list"></div>
+    </div>
+  </div>
+
+  <!-- TAB: APPROVALS & FINANCIALS -->
+  <div class="tab-panel" id="tab-financials">
+    <div class="card">
+      <h3 style="margin-top:0;">Pending Savings Group Registrations</h3>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Member</th><th>Email</th><th>Group</th><th>Fee</th><th>Paid Date</th><th>Actions</th></tr></thead>
+          <tbody id="sa-approvals-tbody"><tr><td colspan="6" class="empty-note">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;">Pending Withdrawal Requests</h3>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Member</th><th>Group</th><th>Amount</th><th>Purpose</th><th>Requested</th><th>Actions</th></tr></thead>
+          <tbody id="sa-withdrawals-tbody"><tr><td colspan="6" class="empty-note">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: FEEDBACK FORMS -->
+  <div class="tab-panel" id="tab-feedback">
+    <div class="card">
+      <h3 style="margin-top:0;">Feedback Forms</h3>
+      <p class="empty-note">Building forms and viewing results happens on the Feedback Forms page. Deactivating a form, deleting a form, and removing questions are Super Admin actions available there once you're signed in as the super admin.</p>
+      <div id="sa-feedback-summary" class="stat-grid" style="margin-bottom:1rem;"></div>
+      <a href="./feedback.html" class="mini-btn good" style="text-decoration:none; display:inline-block;">Open Feedback Forms →</a>
+    </div>
+  </div>
+</main>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from '../assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { requireSuperAdmin } from '../assets/js/admin-guard.js';
+  import '../assets/js/session-guard.js';
+
+  mountNav('admin');
+  mountFooter();
+
+  const superAdmin = await requireSuperAdmin();
+  if (!superAdmin) throw new Error('redirecting');
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+    });
+  });
+
+  function actionSelectHtml(kind, id, options, placeholder = 'Actions') {
+    return `
+      <select class="action-select" data-kind="${kind}" data-id="${id}">
+        <option value="">${placeholder}</option>
+        ${options.map(({ value, label }) => `<option value="${value}">${label}</option>`).join('')}
+      </select>
+    `;
+  }
+
+  document.addEventListener('change', async (event) => {
+    const select = event.target.closest('.action-select');
+    if (!select || !select.value) return;
+    const { kind, id } = select.dataset;
+    const action = select.value;
+    select.value = '';
+
+    if (['news', 'events', 'jobs', 'forumTopics', 'forumReplies', 'announcements'].includes(kind)) {
+      return handleContentAction(kind, action, id);
+    }
+    if (kind === 'savings-group') return handleSavingsGroupAction(action, id);
+    if (kind === 'savings-approval') return handleSavingsApprovalAction(action, id);
+    if (kind === 'withdrawal') return handleWithdrawalAction(action, id);
+    if (kind === 'candidate') return handleCandidateAction(action, id);
+    if (kind === 'election') return handleElectionAction(action, id);
+  });
+
+  const alertBox = document.getElementById('alert-box');
+  function flash(msg, type = 'success') {
+    alertBox.innerHTML = `<div class="alert alert-${type}">${escapeHtml(msg)}</div>`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => { alertBox.innerHTML = ''; }, 5000);
+  }
+
+  let allMembers = [];
+
+  await loadStats();
+  await loadMembers();
+  await loadContentManagement();
+  await loadSavingsGroupsTab();
+  await loadElectionsTab();
+  await loadSavingsApprovals();
+  await loadWithdrawals();
+  await loadFeedbackSummary();
+
+  document.getElementById('member-search').addEventListener('input', debounce(renderMembers, 250));
+
+  async function loadStats() {
+    const { data } = await supabase.from('profiles').select('role, is_super_admin');
+    const total = data?.length || 0;
+    const admins = data?.filter(p => p.role === 'admin').length || 0;
+    const supers = data?.filter(p => p.is_super_admin).length || 0;
+    const leaders = data?.filter(p => p.role === 'leader').length || 0;
+
+    document.getElementById('stat-row').innerHTML = `
+      <div class="stat-box"><strong>${total}</strong><span>Total Members</span></div>
+      <div class="stat-box"><strong>${admins}</strong><span>Admins</span></div>
+      <div class="stat-box"><strong>${leaders}</strong><span>Leaders</span></div>
+      <div class="stat-box"><strong>${supers}</strong><span>Super Admin${supers === 1 ? '' : 's'}</span></div>
+    `;
+  }
+
+  async function loadMembers() {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, role, is_super_admin')
+      .order('full_name', { ascending: true });
+
+    if (error) {
+      document.getElementById('members-tbody').innerHTML = `<tr><td colspan="5" class="empty-note">Could not load members: ${escapeHtml(error.message)}</td></tr>`;
+      return;
+    }
+    allMembers = data || [];
+    renderMembers();
+  }
+
+  function renderMembers() {
+    const q = document.getElementById('member-search').value.trim().toLowerCase();
+    const rows = allMembers.filter(m =>
+      !q || m.full_name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q)
+    );
+
+    const tbody = document.getElementById('members-tbody');
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-note">No members match that search.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map(m => `
+      <tr data-id="${m.id}">
+        <td>${escapeHtml(m.full_name)}</td>
+        <td>${escapeHtml(m.email)}</td>
+        <td>
+          ${m.is_super_admin
+            ? '<span class="pill pill-super">Super Admin</span>'
+            : `<span class="pill pill-${m.role}">${escapeHtml(m.role)}</span>`}
+        </td>
+        <td>
+          ${m.is_super_admin ? '<span class="empty-note">—</span>' : `
+            <div class="role-row">
+              <select data-role-select="${m.id}">
+                <option value="member" ${m.role === 'member' ? 'selected' : ''}>Member</option>
+                <option value="leader" ${m.role === 'leader' ? 'selected' : ''}>Leader</option>
+                <option value="admin" ${m.role === 'admin' ? 'selected' : ''}>Admin</option>
+              </select>
+              <button type="button" class="mini-btn good" data-apply-role="${m.id}">Update</button>
+            </div>
+          `}
+        </td>
+        <td>
+          ${m.is_super_admin ? '<span class="empty-note">—</span>' : `
+            <button type="button" class="mini-btn bad" data-delete-member="${m.id}" data-member-email="${escapeHtml(m.email)}" data-member-name="${escapeHtml(m.full_name)}">Delete</button>
+          `}
+        </td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('button[data-apply-role]').forEach(btn => {
+      btn.addEventListener('click', () => updateRole(btn.dataset.applyRole));
+    });
+    tbody.querySelectorAll('button[data-delete-member]').forEach(btn => {
+      btn.addEventListener('click', () => deleteMemberPermanently(
+        btn.dataset.deleteMember,
+        btn.dataset.memberEmail,
+        btn.dataset.memberName
+      ));
+    });
+  }
+
+  async function updateRole(id) {
+    const select = document.querySelector(`select[data-role-select="${id}"]`);
+    const newRole = select.value;
+    const member = allMembers.find(m => m.id === id);
+
+    if (newRole === 'admin' && !confirm(`Grant admin privileges to ${member?.full_name}?`)) return;
+    if (member?.role === 'admin' && newRole !== 'admin' && !confirm(`Remove admin privileges from ${member?.full_name}?`)) return;
+
+    const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', id);
+    if (error) { flash(error.message, 'error'); return; }
+    flash(`${member?.full_name}'s role is now "${newRole}".`);
+    await loadStats();
+    await loadMembers();
+  }
+
+  async function deleteMemberPermanently(id, email, fullName) {
+    // Deliberately heavier friction than a role change: this permanently
+    // erases the auth account, the profile, and every record that belongs
+    // solely to them (votes cast, candidacies, savings memberships,
+    // feedback responses). Content they merely authored (news, forum
+    // posts, events, etc.) stays, just with the "posted by" credit
+    // cleared. There is no undo.
+    const typed = prompt(
+      `This will PERMANENTLY delete ${fullName} (${email}) and cannot be undone.\n\n` +
+      `Type their email address to confirm:`
+    );
+    if (typed === null) return;
+    if (typed.trim().toLowerCase() !== email.trim().toLowerCase()) {
+      flash('Email did not match — deletion cancelled.', 'error');
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+      body: { userId: id },
+    });
+
+    if (error) {
+      flash(`Could not delete user: ${error.message || 'Unknown error'}`, 'error');
+      return;
+    }
+    if (data?.error) {
+      flash(`Could not delete user: ${data.error}`, 'error');
+      return;
+    }
+
+    flash(`${fullName} has been permanently deleted.`);
+    await loadStats();
+    await loadMembers();
+  }
+
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+
+  // =====================================================================
+  // CONTENT — publish/hide + delete for news, events, jobs, forum posts,
+  // and savings announcements. Creating new items is a regular-admin task
+  // (see admin/index.html); this dashboard only edits/removes what exists.
+  // =====================================================================
+  const CONTENT_TABLE_MAP = {
+    news: 'news', events: 'events', jobs: 'jobs',
+    forumTopics: 'forum_topics', forumReplies: 'forum_replies', announcements: 'savings_announcements',
+  };
+  const CONTENT_TITLES = {
+    news: 'News', events: 'Events', jobs: 'Jobs',
+    forumTopics: 'Forum Topics', forumReplies: 'Forum Replies', announcements: 'Savings Announcements',
+  };
+
+  async function loadContentManagement() {
+    const [newsRes, eventsRes, jobsRes, topicsRes, repliesRes, announcementsRes] = await Promise.all([
+      supabase.from('news').select('id, title, category, is_active, published_at').order('published_at', { ascending: false }).limit(15),
+      supabase.from('events').select('id, title, event_date, location, is_active').order('event_date', { ascending: false }).limit(15),
+      supabase.from('jobs').select('id, title, company, is_active, posted_at').order('posted_at', { ascending: false }).limit(15),
+      supabase.from('forum_topics').select('id, title, category, is_locked, is_active, created_at').order('created_at', { ascending: false }).limit(15),
+      supabase.from('forum_replies').select('id, content, is_active, created_at, forum_topics(title)').order('created_at', { ascending: false }).limit(15),
+      supabase.from('savings_announcements').select('id, title, is_pinned, is_active, posted_at, savings_groups(name)').order('posted_at', { ascending: false }).limit(15),
+    ]);
+
+    const sections = { news: newsRes, events: eventsRes, jobs: jobsRes, forumTopics: topicsRes, forumReplies: repliesRes, announcements: announcementsRes };
+
+    document.getElementById('content-sections').innerHTML = Object.entries(sections).map(([kind, res]) => {
+      if (res.error) {
+        return `<div class="card"><h3 style="margin-top:0;">${CONTENT_TITLES[kind]}</h3><div class="empty-note">Could not load: ${escapeHtml(res.error.message)}</div></div>`;
+      }
+      const rows = res.data || [];
+      const rowsHtml = rows.map(r => `
+        <tr>
+          <td>${escapeHtml(r.title || r.content?.slice(0, 60) || r.forum_topics?.title || '—')}</td>
+          <td>${escapeHtml(r.category || r.company || r.location || r.savings_groups?.name || '—')}</td>
+          <td><span class="pill ${r.is_active ? 'pill-active' : 'pill-rejected'}">${r.is_active ? 'active' : 'hidden'}</span></td>
+          <td>${actionSelectHtml(kind, r.id, [
+            { value: r.is_active ? 'hide' : 'publish', label: r.is_active ? 'Hide' : 'Publish' },
+            { value: 'delete', label: 'Delete' },
+          ])}</td>
+        </tr>
+      `).join('') || `<tr><td colspan="4" class="empty-note">No records found.</td></tr>`;
+
+      return `
+        <div class="card">
+          <h3 style="margin-top:0;">${CONTENT_TITLES[kind]}</h3>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Title</th><th>Category / Group</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function handleContentAction(kind, action, id) {
+    const table = CONTENT_TABLE_MAP[kind];
+    if (action === 'delete') {
+      if (!confirm('Delete this item permanently?')) return;
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (error) return flash(error.message, 'error');
+      flash('Item deleted.');
+      return loadContentManagement();
+    }
+    if (action === 'publish' || action === 'hide') {
+      const { error } = await supabase.from(table).update({ is_active: action === 'publish' }).eq('id', id);
+      if (error) return flash(error.message, 'error');
+      flash('Status updated.');
+      return loadContentManagement();
+    }
+  }
+
+  // =====================================================================
+  // SAVINGS GROUPS — edit (amounts), activate/deactivate, delete.
+  // =====================================================================
+  let savingsGroups = [];
+
+  async function loadSavingsGroupsTab() {
+    const { data, error } = await supabase.from('savings_groups').select('*').order('created_at', { ascending: false });
+    if (error) {
+      document.getElementById('sa-groups-tbody').innerHTML = `<tr><td colspan="6" class="empty-note">Could not load: ${escapeHtml(error.message)}</td></tr>`;
+      return;
+    }
+    savingsGroups = data || [];
+    document.getElementById('sa-groups-tbody').innerHTML = savingsGroups.map(g => `
+      <tr>
+        <td><strong>${escapeHtml(g.name)}</strong></td>
+        <td>${g.currency || 'UGX'} ${Number(g.monthly_contribution).toLocaleString()}</td>
+        <td>${g.currency || 'UGX'} ${Number(g.group_join_fee).toLocaleString()}</td>
+        <td>${g.max_members ?? '—'}</td>
+        <td><span class="pill ${g.is_active ? 'pill-active' : 'pill-rejected'}">${g.is_active ? 'active' : 'inactive'}</span></td>
+        <td>${actionSelectHtml('savings-group', g.id, [
+          { value: 'edit', label: 'Edit Amounts' },
+          { value: g.is_active ? 'deactivate' : 'activate', label: g.is_active ? 'Deactivate' : 'Activate' },
+          { value: 'delete', label: 'Delete' },
+        ])}</td>
+      </tr>
+    `).join('') || `<tr><td colspan="6" class="empty-note">No savings groups found.</td></tr>`;
+  }
+
+  async function handleSavingsGroupAction(action, id) {
+    const group = savingsGroups.find(g => g.id === id);
+    if (action === 'delete') {
+      if (!confirm(`Delete "${group?.name}"? This cannot be undone.`)) return;
+      const { error } = await supabase.from('savings_groups').delete().eq('id', id);
+      if (error) return flash(error.message, 'error');
+      flash('Group deleted.');
+      return loadSavingsGroupsTab();
+    }
+    if (action === 'activate' || action === 'deactivate') {
+      const { error } = await supabase.from('savings_groups').update({ is_active: action === 'activate' }).eq('id', id);
+      if (error) return flash(error.message, 'error');
+      flash('Group status updated.');
+      return loadSavingsGroupsTab();
+    }
+    if (action === 'edit') {
+      const monthly = prompt('Monthly contribution:', group?.monthly_contribution);
+      if (monthly === null) return;
+      const joinFee = prompt('Join fee:', group?.group_join_fee);
+      if (joinFee === null) return;
+      const maxMembers = prompt('Max members:', group?.max_members);
+      if (maxMembers === null) return;
+      const { error } = await supabase.from('savings_groups').update({
+        monthly_contribution: Number(monthly) || 0,
+        group_join_fee: Number(joinFee) || 0,
+        max_members: Number(maxMembers) || null,
+      }).eq('id', id);
+      if (error) return flash(error.message, 'error');
+      flash('Group updated.');
+      return loadSavingsGroupsTab();
+    }
+  }
+
+  // =====================================================================
+  // ELECTIONS — status changes, candidate approval, delete, close +
+  // auto-promote winners.
+  // =====================================================================
+  let elections = [];
+  let candidatesByElection = {};
+
+  async function loadElectionsTab() {
+    const { data, error } = await supabase.from('elections').select('*').order('start_date', { ascending: false });
+    if (error) {
+      document.getElementById('sa-elections-list').innerHTML = `<div class="empty-note">Could not load: ${escapeHtml(error.message)}</div>`;
+      return;
+    }
+    elections = data || [];
+
+    const { data: allCandidates } = await supabase
+      .from('candidates')
+      .select('id, election_id, position, manifesto, approved, profiles(full_name, email)');
+    candidatesByElection = {};
+    (allCandidates || []).forEach(c => {
+      (candidatesByElection[c.election_id] ||= []).push(c);
+    });
+
+    document.getElementById('sa-elections-list').innerHTML = elections.map(e => renderElectionCard(e)).join('') ||
+      `<p class="empty-note">No elections scheduled.</p>`;
+
+    document.querySelectorAll('form[data-add-candidate]').forEach(form => {
+      form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        await addCandidate(form.dataset.addCandidate, form);
+      });
+    });
+  }
+
+  function renderElectionCard(e) {
+    const cands = candidatesByElection[e.id] || [];
+    const candRows = cands.map(c => `
+      <tr>
+        <td>${escapeHtml(c.profiles?.full_name || '—')}</td>
+        <td>${escapeHtml(c.position)}</td>
+        <td><span class="pill ${c.approved ? 'pill-active' : 'pill-pending'}">${c.approved ? 'approved' : 'pending'}</span></td>
+        <td>${actionSelectHtml('candidate', c.id, [
+          { value: c.approved ? 'unapprove' : 'approve', label: c.approved ? 'Unapprove' : 'Approve' },
+          { value: 'delete', label: 'Remove' },
+        ])}</td>
+      </tr>
+    `).join('') || `<tr><td colspan="4" class="empty-note">No candidates yet.</td></tr>`;
+
+    return `
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+          <div>
+            <h3 style="margin:0 0 0.25rem;">${escapeHtml(e.title)}</h3>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin:0;">${new Date(e.start_date).toLocaleString()} – ${new Date(e.end_date).toLocaleString()}</p>
+          </div>
+          ${actionSelectHtml('election', e.id, [
+            { value: 'draft', label: 'Set: Draft' },
+            { value: 'upcoming', label: 'Set: Upcoming' },
+            { value: 'active', label: 'Set: Active' },
+            { value: 'closed', label: 'Close & Promote Winners' },
+            { value: 'delete', label: 'Delete Election' },
+          ], `Status: ${e.status}`)}
+        </div>
+
+        <h4 style="margin:1rem 0 0.5rem;">Candidates</h4>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Name</th><th>Position</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>${candRows}</tbody>
+          </table>
+        </div>
+
+        <form data-add-candidate="${e.id}" style="margin-top:1rem; display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:0.6rem; align-items:end;">
+          <div class="form-group" style="margin-bottom:0;"><label>Candidate email</label><input type="email" name="email" required /></div>
+          <div class="form-group" style="margin-bottom:0;"><label>Position</label><input type="text" name="position" required /></div>
+          <div class="form-group" style="margin-bottom:0;"><label>Manifesto</label><input type="text" name="manifesto" /></div>
+          <button type="submit" class="mini-btn good">+ Add Candidate</button>
+        </form>
+      </div>
+    `;
+  }
+
+  async function addCandidate(electionId, form) {
+    const formData = new FormData(form);
+    const email = formData.get('email').trim().toLowerCase();
+    const position = formData.get('position').trim();
+    const manifesto = formData.get('manifesto').trim() || null;
+
+    const { data: profile, error: lookupErr } = await supabase.from('profiles').select('id').eq('email', email).single();
+    if (lookupErr || !profile) return flash(`No member found with email ${email}.`, 'error');
+
+    const { error } = await supabase.from('candidates').insert({
+      election_id: electionId, user_id: profile.id, position, manifesto,
+    });
+    if (error) return flash(error.message, 'error');
+    flash('Candidate added.');
+    form.reset();
+    loadElectionsTab();
+  }
+
+  async function handleCandidateAction(action, id) {
+    if (action === 'delete') {
+      if (!confirm('Remove this candidate?')) return;
+      const { error } = await supabase.from('candidates').delete().eq('id', id);
+      if (error) return flash(error.message, 'error');
+      flash('Candidate removed.');
+      return loadElectionsTab();
+    }
+    const { error } = await supabase.from('candidates').update({ approved: action === 'approve' }).eq('id', id);
+    if (error) return flash(error.message, 'error');
+    flash(action === 'approve' ? 'Candidate approved.' : 'Candidate unapproved.');
+    return loadElectionsTab();
+  }
+
+  async function handleElectionAction(action, id) {
+    const election = elections.find(e => e.id === id);
+    if (action === 'delete') {
+      if (!confirm(`Delete "${election?.title}"? All candidates and votes for it will be removed too.`)) return;
+      const { error } = await supabase.from('elections').delete().eq('id', id);
+      if (error) return flash(error.message, 'error');
+      flash('Election deleted.');
+      return loadElectionsTab();
+    }
+
+    if (action === 'closed' && !confirm(`Close "${election?.title}" and promote winners to Leadership? This cannot be undone.`)) return;
+
+    const { error } = await supabase.from('elections').update({ status: action }).eq('id', id);
+    if (error) return flash(error.message, 'error');
+
+    if (action === 'closed') {
+      const { error: promoteErr } = await supabase.rpc('promote_election_winners', { p_election_id: id });
+      if (promoteErr) {
+        flash(`Election closed, but winner promotion failed: ${promoteErr.message}`, 'error');
+        return loadElectionsTab();
+      }
+      flash('Election closed and winners promoted to Leadership.');
+    } else {
+      flash(`Election status set to "${action}".`);
+    }
+    return loadElectionsTab();
+  }
+
+  // =====================================================================
+  // APPROVALS & FINANCIALS — savings-group activation & withdrawals.
+  // =====================================================================
+  async function loadSavingsApprovals() {
+    const { data, error } = await supabase
+      .from('savings_group_members')
+      .select('id, join_fee_paid_at, profiles(full_name, email), savings_groups(name, group_join_fee)')
+      .eq('status', 'pending').eq('join_fee_paid', true);
+    if (error) {
+      document.getElementById('sa-approvals-tbody').innerHTML = `<tr><td colspan="6" class="empty-note">Could not load: ${escapeHtml(error.message)}</td></tr>`;
+      return;
+    }
+    document.getElementById('sa-approvals-tbody').innerHTML = (data || []).map(r => `
+      <tr>
+        <td>${escapeHtml(r.profiles?.full_name)}</td>
+        <td>${escapeHtml(r.profiles?.email)}</td>
+        <td>${escapeHtml(r.savings_groups?.name)}</td>
+        <td>${Number(r.savings_groups?.group_join_fee).toLocaleString()}</td>
+        <td>${r.join_fee_paid_at ? new Date(r.join_fee_paid_at).toLocaleDateString() : '—'}</td>
+        <td>${actionSelectHtml('savings-approval', r.id, [{ value: 'activate', label: 'Activate' }, { value: 'reject', label: 'Reject' }])}</td>
+      </tr>
+    `).join('') || `<tr><td colspan="6" class="empty-note">No pending activations.</td></tr>`;
+  }
+
+  async function handleSavingsApprovalAction(action, id) {
+    const updates = action === 'activate'
+      ? { status: 'active', approved_by: superAdmin.id, approved_at: new Date().toISOString() }
+      : { status: 'removed' };
+    const { error } = await supabase.from('savings_group_members').update(updates).eq('id', id);
+    if (error) return flash(error.message, 'error');
+    flash(action === 'activate' ? 'Membership activated.' : 'Registration rejected.');
+    loadSavingsApprovals();
+    loadStats();
+  }
+
+  async function loadWithdrawals() {
+    const { data, error } = await supabase
+      .from('savings_transactions')
+      .select('id, amount, purpose, created_at, profiles(full_name, email), savings_groups(name)')
+      .eq('type', 'withdrawal').eq('status', 'pending');
+    if (error) {
+      document.getElementById('sa-withdrawals-tbody').innerHTML = `<tr><td colspan="6" class="empty-note">Could not load: ${escapeHtml(error.message)}</td></tr>`;
+      return;
+    }
+    document.getElementById('sa-withdrawals-tbody').innerHTML = (data || []).map(r => `
+      <tr>
+        <td>${escapeHtml(r.profiles?.full_name)}</td>
+        <td>${escapeHtml(r.savings_groups?.name)}</td>
+        <td>${Number(r.amount).toLocaleString()}</td>
+        <td>${escapeHtml(r.purpose)}</td>
+        <td>${new Date(r.created_at).toLocaleDateString()}</td>
+        <td>${actionSelectHtml('withdrawal', r.id, [{ value: 'approve', label: 'Approve' }, { value: 'reject', label: 'Reject' }])}</td>
+      </tr>
+    `).join('') || `<tr><td colspan="6" class="empty-note">No withdrawal requests.</td></tr>`;
+  }
+
+  async function handleWithdrawalAction(action, id) {
+    if (action === 'approve' && !confirm('Approve this withdrawal ONLY after funds have been physically disbursed. Continue?')) return;
+    const updates = action === 'approve'
+      ? { status: 'completed', approved_by: superAdmin.id, approved_at: new Date().toISOString(), disbursed_at: new Date().toISOString() }
+      : { status: 'rejected', approved_by: superAdmin.id, approved_at: new Date().toISOString() };
+    const { error } = await supabase.from('savings_transactions').update(updates).eq('id', id);
+    if (error) return flash(error.message, 'error');
+    flash(action === 'approve' ? 'Withdrawal approved.' : 'Withdrawal rejected.');
+    loadWithdrawals();
+    loadStats();
+  }
+
+  // =====================================================================
+  // FEEDBACK FORMS — quick summary; full management lives on feedback.html
+  // =====================================================================
+  async function loadFeedbackSummary() {
+    const { data, error } = await supabase.from('feedback_forms').select('id, is_active');
+    const el = document.getElementById('sa-feedback-summary');
+    if (error) {
+      el.innerHTML = `<div class="empty-note">Could not load: ${escapeHtml(error.message)}</div>`;
+      return;
+    }
+    const total = data?.length || 0;
+    const active = data?.filter(f => f.is_active).length || 0;
+    el.innerHTML = `
+      <div class="stat-box"><strong>${total}</strong><span>Total Forms</span></div>
+      <div class="stat-box"><strong>${active}</strong><span>Active Forms</span></div>
+    `;
+  }
+
+</script>
+</body>
+</html>

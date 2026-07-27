@@ -6,23 +6,19 @@
 <meta name="robots" content="noindex, nofollow" />
 <title>Savings History — SJB Association</title>
 <link rel="stylesheet" href="../assets/css/style.css" />
-<style>
-  table { width:100%; border-collapse: collapse; background:var(--paper); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
-  th, td { text-align:left; padding:0.75rem 1rem; border-bottom:1px solid var(--border); font-size:0.9rem; }
-  th { background:var(--ink-navy); color:#fff; font-weight:600; }
-  .status-pill { padding:0.2rem 0.6rem; border-radius:20px; font-size:0.78rem; font-weight:600; }
-  .status-completed { background:#eaf4ec; color:#1f4b3f; }
-  .status-pending { background:#fdf3e0; color:#8a6100; }
-  .status-rejected { background:#fdecec; color:#9c2b2b; }
-</style>
 </head>
 <body>
 <div id="app-nav"></div>
 <div id="savings-sidebar"></div>
 
 <div class="section savings-content">
-  <div class="section-head"><span class="eyebrow">Savings</span><h2 id="group-title">History</h2></div>
-  <div id="content"></div>
+  <div class="section-head">
+    <span class="eyebrow">Savings</span>
+    <h2 id="group-title">History</h2>
+    <p style="color:var(--text-muted);">Your contributions and withdrawal requests for this group.</p>
+  </div>
+  <div id="content"><p class="loading-muted">Loading history…</p></div>
+  <p style="margin-top:1.25rem;font-size:0.85rem;"><a href="dashboard.html">← Back to My Savings</a></p>
 </div>
 
 <div id="app-footer"></div>
@@ -43,7 +39,10 @@
   if (!result) throw new Error('redirecting');
   const membership = result.memberships.find(m => m.group_id === groupId);
   const content = document.getElementById('content');
-  if (!membership) { content.innerHTML = `<div class="alert alert-error">You are not an active member of that group.</div>`; throw new Error('not a member'); }
+  if (!membership) {
+    content.innerHTML = `<div class="alert alert-error">You are not an active member of that group.</div>`;
+    throw new Error('not a member');
+  }
 
   document.getElementById('group-title').textContent = `${membership.savings_groups.name} — History`;
 
@@ -54,20 +53,22 @@
     .order('created_at', { ascending: false });
 
   if (!txns || txns.length === 0) {
-    content.innerHTML = `<p style="text-align:center;color:var(--text-muted);">No transactions yet.</p>`;
+    content.innerHTML = `<div class="empty-state"><h3>No transactions yet</h3><p>Contributions and withdrawals will appear here.</p></div>`;
   } else {
-    content.innerHTML = `<table>
+    content.innerHTML = `<div class="data-table-wrap"><table class="data-table">
       <thead><tr><th>Date</th><th>Type</th><th>Period / Purpose</th><th>Amount (UGX)</th><th>Status</th></tr></thead>
       <tbody>${txns.map(t => `
         <tr>
           <td>${new Date(t.created_at).toLocaleDateString()}</td>
           <td>${t.type === 'contribution' ? 'Contribution' : 'Withdrawal'}</td>
-          <td>${t.type === 'contribution' ? (t.month_year ? new Date(t.month_year).toLocaleString('default', { month: 'long', year: 'numeric' }) : '—') : escapeHtml(t.purpose || '—')}</td>
+          <td>${t.type === 'contribution'
+            ? (t.month_year ? new Date(t.month_year).toLocaleString('default', { month: 'long', year: 'numeric' }) : '—')
+            : escapeHtml(t.purpose || '—')}</td>
           <td>${Number(t.amount).toLocaleString()}</td>
           <td><span class="status-pill status-${t.status}">${t.status}</span></td>
         </tr>`).join('')}
       </tbody>
-    </table>`;
+    </table></div>`;
   }
 
   function escapeHtml(str) {

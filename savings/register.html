@@ -16,11 +16,11 @@
   <div class="section-head">
     <span class="eyebrow">Savings</span>
     <h2>Join a savings group</h2>
-    <p style="color:var(--text-muted);">Only approved, fee-paid association members can join. Each group saves a fixed <strong>UGX 10,000 per month</strong>. A one-time group join fee applies.</p>
+    <p style="color:var(--text-muted);max-width:36rem;">Only approved, fee-paid association members can join. Each group has its own monthly contribution and a one-time join fee.</p>
   </div>
 
   <div id="alert-box"></div>
-  <div class="card-grid" id="groups-grid"><p style="text-align:center;color:var(--text-muted);grid-column:1/-1;">Loading groups...</p></div>
+  <div class="card-grid" id="groups-grid"><p class="loading-muted" style="grid-column:1/-1;">Loading groups…</p></div>
 </div>
 
 <div id="app-footer"></div>
@@ -45,42 +45,61 @@
 
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) window.location.href = '../login.html';
-  const { data: profile } = await supabase.from('profiles').select('status, membership_fee_paid').eq('id', session.user.id).single();
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('status, membership_fee_paid')
+    .eq('id', session.user.id)
+    .single();
   if (!profile || profile.status !== 'approved') window.location.href = '../pending-approval.html';
-  if (!profile.membership_fee_paid) { showFeePaymentPrompt(); throw new Error('unpaid'); }
+  if (!profile.membership_fee_paid) {
+    showFeePaymentPrompt();
+    throw new Error('unpaid');
+  }
 
   const { data: groups } = await supabase.from('savings_groups').select('*').eq('is_active', true);
-  const { data: myMemberships } = await supabase.from('savings_group_members').select('group_id, status, join_fee_paid').eq('user_id', session.user.id);
+  const { data: myMemberships } = await supabase
+    .from('savings_group_members')
+    .select('group_id, status, join_fee_paid')
+    .eq('user_id', session.user.id);
   const myMap = new Map((myMemberships || []).map(m => [m.group_id, m]));
 
   const grid = document.getElementById('groups-grid');
   if (!groups || groups.length === 0) {
-    grid.innerHTML = `<p style="text-align:center;color:var(--text-muted);grid-column:1/-1;">No savings groups are open right now. Check back soon.</p>`;
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>No groups open</h3><p>No savings groups are open right now. Check back soon.</p></div>`;
   } else {
     grid.innerHTML = groups.map(g => {
       const mine = myMap.get(g.id);
       let actionHtml;
       if (mine?.status === 'active') {
-        actionHtml = `<a href="dashboard.html" class="btn btn-gold btn-block">Go to Group</a>`;
+        actionHtml = `<a href="dashboard.html" class="btn btn-gold btn-block">Go to group</a>`;
       } else if (mine?.status === 'pending' && mine?.join_fee_paid) {
-        actionHtml = `<button class="btn btn-outline-light" style="background:var(--forest);color:#fff;width:100%;" disabled>Awaiting Admin Approval</button>`;
+        actionHtml = `<button class="btn-secondary" style="width:100%;" disabled>Awaiting admin approval</button>`;
       } else if (mine?.status === 'pending') {
-        actionHtml = `<button class="btn btn-gold btn-block join-btn" data-group='${JSON.stringify(g)}'>Pay Join Fee (UGX ${Number(g.group_join_fee).toLocaleString()})</button>`;
+        actionHtml = `<button class="btn btn-gold btn-block join-btn" data-group-id="${g.id}">Pay join fee (UGX ${Number(g.group_join_fee).toLocaleString()})</button>`;
       } else {
-        actionHtml = `<button class="btn btn-gold btn-block join-btn" data-group='${JSON.stringify(g)}'>Join — Pay UGX ${Number(g.group_join_fee).toLocaleString()}</button>`;
+        actionHtml = `<button class="btn btn-gold btn-block join-btn" data-group-id="${g.id}">Join — UGX ${Number(g.group_join_fee).toLocaleString()}</button>`;
       }
-      return `<div class="card">
-        <h3>${escapeHtml(g.name)}</h3>
-        <p>${escapeHtml(g.description || '')}</p>
-        <p style="margin:0.75rem 0;"><strong>UGX ${Number(g.monthly_contribution).toLocaleString()}</strong> / month</p>
+      return `<div class="card savings-group-card">
+        <div>
+          <h3 style="margin-bottom:0.35rem;">${escapeHtml(g.name)}</h3>
+          <p style="margin:0;font-size:0.9rem;">${escapeHtml(g.description || 'Group savings circle')}</p>
+        </div>
+        <div class="card-meta">
+          <span>Monthly: <strong>UGX ${Number(g.monthly_contribution).toLocaleString()}</strong></span>
+          <span>Join fee: <strong>UGX ${Number(g.group_join_fee).toLocaleString()}</strong></span>
+          ${g.max_members ? `<span>Max members: <strong>${g.max_members}</strong></span>` : ''}
+        </div>
         ${actionHtml}
       </div>`;
     }).join('');
 
+    const byId = Object.fromEntries(groups.map(g => [g.id, g]));
     document.querySelectorAll('.join-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const group = JSON.parse(btn.dataset.group);
-        btn.disabled = true; btn.textContent = 'Opening secure checkout...';
+        const group = byId[btn.dataset.groupId];
+        if (!group) return;
+        btn.disabled = true;
+        btn.textContent = 'Opening secure checkout…';
         paySavingsJoinFee(group);
       });
     });

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>Admin Dashboard</title>
+  <title>Admin Dashboard — SJB Association</title>
   <link rel="stylesheet" href="../assets/css/style.css" />
   <style>
     :root {
@@ -44,13 +44,20 @@
     .mini-btn.good { background: var(--forest); color: #fff; }
     .mini-btn.bad { background: #b91c1c; color: #fff; }
     .action-select { padding: 0.35rem; border-radius: 4px; border: 1px solid var(--border); font-size: 0.85rem; }
+    .member-avatar-img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; display: block; }
+    .member-avatar-fallback {
+      width: 36px; height: 36px; border-radius: 50%; background: var(--forest); color: #fff;
+      font-weight: 700; font-size: 0.8rem; display: flex; align-items: center; justify-content: center;
+    }
   </style>
 </head>
 <body>
   <div id="app-nav"></div>
 
   <main class="admin-container">
+    <div id="super-admin-banner"></div>
     <h2>Admin Dashboard</h2>
+    <p style="color:var(--text-muted);margin-top:-0.5rem;margin-bottom:1.25rem;font-size:0.92rem;">Manage members, content, savings groups, and elections. Critical edits require the Super Admin.</p>
     <div id="alert-box"></div>
 
     <!-- Stats Summary Row -->
@@ -102,6 +109,7 @@
           <label>Role</label>
           <select id="nu-role">
             <option value="member" selected>Member</option>
+            <option value="leader">Leader</option>
             <option value="admin">Admin</option>
           </select>
         </div>
@@ -142,7 +150,8 @@
       <button class="tab-btn" data-tab="content">Content Management</button>
       <button class="tab-btn" data-tab="savings">Savings Groups</button>
       <button class="tab-btn" data-tab="elections">Elections</button>
-      <button class="tab-btn" data-tab="financials">Approvals & Financials</button>
+      <a href="./super-admin.html" class="tab-btn" style="text-decoration:none; display:inline-flex; align-items:center;" title="Approving/rejecting savings activations and withdrawals is a Super Admin task">Approvals & Financials ↗</a>
+      <a href="feedback.html" class="tab-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Feedback Forms ↗</a>
     </div>
 
     
@@ -163,7 +172,7 @@
         <div style="overflow-x:auto;">
           <table class="admin-table">
             <thead>
-              <tr><th>Name</th><th>Email</th><th>Class</th><th>Status</th><th>Fee</th><th>Role</th><th>Joined</th><th>Actions</th></tr>
+              <tr><th>Photo</th><th>Name</th><th>Email</th><th>Class</th><th>Status</th><th>Fee</th><th>Role</th><th>Joined</th><th>Actions</th></tr>
             </thead>
             <tbody id="members-tbody"></tbody>
           </table>
@@ -173,6 +182,7 @@
 
     <!-- TAB 2: CONTENT MANAGEMENT -->
     <div class="tab-panel" id="tab-content">
+      <p class="admin-hint">You can create new posts below. Editing, publishing/hiding, and deleting existing posts are Super Admin actions.</p>
       <div id="content-management"></div>
     </div>
 
@@ -222,30 +232,6 @@
       </div>
     </div>
 
-    <!-- TAB 5: APPROVALS & FINANCIALS -->
-    <div class="tab-panel" id="tab-financials">
-      <div class="card">
-        <h3>Pending Savings Group Registrations</h3>
-        <div style="overflow-x:auto;">
-          <table class="admin-table">
-            <thead><tr><th>Member</th><th>Email</th><th>Group</th><th>Fee</th><th>Paid Date</th><th>Actions</th></tr></thead>
-            <tbody id="savings-approvals-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Pending Withdrawal Requests</h3>
-        <div style="overflow-x:auto;">
-          <table class="admin-table">
-            <thead><tr><th>Member</th><th>Group</th><th>Amount</th><th>Purpose</th><th>Requested Date</th><th>Actions</th></tr></thead>
-            <tbody id="withdrawals-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    
   </main>
 
   <div id="app-footer"></div>
@@ -262,6 +248,18 @@
     const admin = await requireAdmin();
     if (!admin) throw new Error('redirecting');
 
+    if (admin.is_super_admin) {
+      document.getElementById('super-admin-banner').innerHTML = `
+        <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:#fff7e6; border-color:var(--gold);">
+          <span>You're signed in as the <strong>super admin</strong> — role changes and permanent deletion have moved to the dedicated dashboard.</span>
+          <a href="./super-admin.html" class="mini-btn good">Open Super Admin Dashboard</a>
+        </div>
+      `;
+    } else {
+      // Only the super admin may create new admin accounts.
+      document.getElementById('nu-role').querySelector('option[value="admin"]')?.remove();
+    }
+
     const alertBox = document.getElementById('alert-box');
     function flash(msg, type = 'success') {
       alertBox.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
@@ -271,6 +269,16 @@
       const div = document.createElement('div');
       div.textContent = str ?? '';
       return div.innerHTML;
+    }
+    function initials(name) {
+      if (!name) return '?';
+      return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
+    }
+    function memberAvatarHtml(m) {
+      if (m.profile_photo_url) {
+        return `<img src="${m.profile_photo_url}" alt="${escapeHtml(m.full_name)}" class="member-avatar-img" />`;
+      }
+      return `<span class="member-avatar-fallback">${initials(m.full_name)}</span>`;
     }
     // Robust error-message extraction. Supabase/Edge-Function errors come back
     // as plain objects (not real Error instances), so err.message alone can be
@@ -374,13 +382,6 @@
       select.value = '';
 
       if (kind === 'member') return handleMemberAction(action, id);
-      if (kind === 'savings-approval') return handleSavingsApprovalAction(action, id);
-      if (kind === 'withdrawal') return handleWithdrawalAction(action, id);
-      if (kind === 'candidate') return handleCandidateAction(action, id);
-      if (kind === 'election') return handleElectionAction(action, id);
-      if (['news', 'event', 'job', 'forum-topic', 'forum-reply', 'announcement', 'event-registration'].includes(kind)) {
-        return handleContentAction(kind, action, id);
-      }
     });
 
     // ---------- Stat row ----------
@@ -414,6 +415,7 @@
       const tbody = document.getElementById('members-tbody');
       tbody.innerHTML = members.map(m => `
         <tr data-id="${m.id}">
+          <td>${memberAvatarHtml(m)}</td>
           <td>
             <a href="#" class="view-toggle" data-id="${m.id}" style="font-weight:600;">${escapeHtml(m.full_name)}</a>
             ${m.locked_until && new Date(m.locked_until) > new Date() ? '<div style="color:#9c2b2b;font-size:0.72rem;">🔒 locked</div>' : ''}
@@ -431,11 +433,11 @@
               ...((m.status === 'suspended' || m.status === 'kicked' || m.status === 'rejected') ? [{ value: 'reactivate', label: 'Reactivate' }] : []),
               ...(!m.membership_fee_paid ? [{ value: 'mark-paid', label: 'Mark Fee Paid' }] : []),
               ...(m.locked_until ? [{ value: 'unlock', label: 'Unlock' }] : []),
-              ...(m.role !== 'admin' ? [{ value: 'make-admin', label: 'Make Admin' }] : [{ value: 'remove-admin', label: 'Remove Admin' }]),
             ])}
           </td>
         </tr>
       `).join('');
+
     }
 
     async function handleMemberAction(action, id) {
@@ -447,12 +449,9 @@
         reactivate: { status: 'approved', approved_by: admin.id, approved_at: new Date().toISOString() },
         'mark-paid': { membership_fee_paid: true, membership_fee_paid_at: new Date().toISOString() },
         unlock: { locked_until: null, failed_login_count: 0 },
-        'make-admin': { role: 'admin' },
-        'remove-admin': { role: 'member' },
       }[action];
 
       if (action === 'kick' && !confirm('Kick this member? They will lose access immediately.')) return;
-      if (action === 'remove-admin' && !confirm('Remove admin privileges from this user?')) return;
 
       const { error } = await supabase.from('profiles').update(updates).eq('id', id);
       if (error) { flash(error.message, 'error'); return; }
@@ -830,6 +829,9 @@
       return headers[title] || '<tr><th>Item</th><th>Actions</th></tr>';
     }
 
+    // Regular admins can create posts but can no longer edit, publish/hide,
+    // or delete existing ones — those are Super Admin Dashboard actions
+    // (see admin/super-admin.html). This row is read-only by design.
     function renderContentRows(kind) {
       const rows = contentState[kind] || [];
       return rows.map(r => `
@@ -839,37 +841,15 @@
           ${r.media_type ? `<td><span class="pill pill-pending">${r.media_type}</span></td>` : ''}
           ${r.doc_url ? `<td><a href="${r.doc_url}" target="_blank" style="font-weight:600; color:var(--forest);">View Attachment</a></td>` : r.media_type ? '<td>—</td>' : ''}
           <td><span class="pill ${r.is_active ? 'pill-active' : 'pill-rejected'}">${r.is_active ? 'active' : 'hidden'}</span></td>
-          <td>${actionSelectHtml(kind, r.id, [
-            { value: 'edit', label: 'Edit' },
-            { value: r.is_active ? 'hide' : 'publish', label: r.is_active ? 'Hide' : 'Publish' },
-            { value: 'delete', label: 'Delete' },
-          ])}</td>
+          <td><span style="color:var(--text-muted); font-size:0.8rem;">Managed by Super Admin</span></td>
         </tr>
       `).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">No records found.</td></tr>`;
     }
 
-    async function handleContentAction(kind, action, id) {
-      const tableMap = { news: 'news', event: 'events', job: 'jobs', 'forum-topic': 'forum_topics', 'forum-reply': 'forum_replies', announcement: 'savings_announcements' };
-      const table = tableMap[kind];
-
-      if (action === 'delete') {
-        if (!confirm('Delete this item?')) return;
-        const { error } = await supabase.from(table).delete().eq('id', id);
-        if (error) return flash(error.message, 'error');
-        flash('Item deleted.');
-        loadContentManagement();
-        return;
-      }
-
-      if (action === 'publish' || action === 'hide') {
-        const { error } = await supabase.from(table).update({ is_active: action === 'publish' }).eq('id', id);
-        if (error) return flash(error.message, 'error');
-        flash('Status updated.');
-        loadContentManagement();
-      }
-    }
-
-    // ---------- Savings Groups, Approvals & Elections Initialization ----------
+    // ---------- Savings Groups & Elections (create + read-only list only) ----------
+    // Activating/deactivating/editing/deleting groups, approving savings
+    // registrations, approving withdrawals, editing election dates/status,
+    // and managing candidates are all Super Admin Dashboard actions now.
     async function loadSavingsGroups() {
       const { data: groups } = await supabase.from('savings_groups').select('*').order('created_at', { ascending: false });
       document.getElementById('savings-groups-tbody').innerHTML = (groups || []).map(g => `
@@ -879,48 +859,67 @@
           <td>${g.currency || 'UGX'} ${Number(g.group_join_fee).toLocaleString()}</td>
           <td>0 / ${g.max_members}</td>
           <td><span class="pill ${g.is_active ? 'pill-active' : 'pill-rejected'}">${g.is_active ? 'active' : 'inactive'}</span></td>
-          <td>—</td>
+          <td><span style="color:var(--text-muted); font-size:0.8rem;">Managed by Super Admin</span></td>
         </tr>
       `).join('') || `<tr><td colspan="6" style="text-align:center;">No savings groups found.</td></tr>`;
     }
 
-    async function loadSavingsApprovals() {
-      const { data: rows } = await supabase.from('savings_group_members').select('id, join_fee_paid_at, profiles(full_name, email), savings_groups(name, group_join_fee)').eq('status', 'pending').eq('join_fee_paid', true);
-      document.getElementById('savings-approvals-tbody').innerHTML = (rows || []).map(r => `
-        <tr>
-          <td>${escapeHtml(r.profiles?.full_name)}</td>
-          <td>${escapeHtml(r.profiles?.email)}</td>
-          <td>${escapeHtml(r.savings_groups?.name)}</td>
-          <td>${Number(r.savings_groups?.group_join_fee).toLocaleString()}</td>
-          <td>${r.join_fee_paid_at ? new Date(r.join_fee_paid_at).toLocaleDateString() : '—'}</td>
-          <td>${actionSelectHtml('savings-approval', r.id, [{ value: 'activate', label: 'Activate' }, { value: 'reject', label: 'Reject' }])}</td>
-        </tr>
-      `).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">No pending activations.</td></tr>`;
-    }
-
-    async function loadWithdrawals() {
-      const { data: rows } = await supabase.from('savings_transactions').select('id, amount, purpose, created_at, profiles(full_name, email), savings_groups(name)').eq('type', 'withdrawal').eq('status', 'pending');
-      document.getElementById('withdrawals-tbody').innerHTML = (rows || []).map(r => `
-        <tr>
-          <td>${escapeHtml(r.profiles?.full_name)}</td>
-          <td>${escapeHtml(r.savings_groups?.name)}</td>
-          <td>${Number(r.amount).toLocaleString()}</td>
-          <td>${escapeHtml(r.purpose)}</td>
-          <td>${new Date(r.created_at).toLocaleDateString()}</td>
-          <td>${actionSelectHtml('withdrawal', r.id, [{ value: 'approve', label: 'Approve' }, { value: 'reject', label: 'Reject' }])}</td>
-        </tr>
-      `).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">No withdrawal requests.</td></tr>`;
-    }
+    document.getElementById('new-group-btn').addEventListener('click', () => {
+      const form = document.getElementById('new-group-form');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    });
+    document.getElementById('create-group-btn').addEventListener('click', async () => {
+      const name = document.getElementById('ng-name').value.trim();
+      if (!name) return flash('Group name is required.', 'error');
+      const payload = {
+        name,
+        monthly_contribution: Number(document.getElementById('ng-monthly').value) || 0,
+        group_join_fee: Number(document.getElementById('ng-joinfee').value) || 0,
+        max_members: Number(document.getElementById('ng-max').value) || 100,
+        description: document.getElementById('ng-desc').value.trim() || null,
+        created_by: admin.id,
+      };
+      const { error } = await supabase.from('savings_groups').insert(payload);
+      if (error) return flash(error.message, 'error');
+      flash('Savings group created.');
+      document.getElementById('new-group-form').style.display = 'none';
+      document.getElementById('new-group-form').querySelectorAll('input').forEach(i => i.value = '');
+      loadSavingsGroups();
+    });
 
     async function loadElections() {
       const { data: elections } = await supabase.from('elections').select('*').order('start_date', { ascending: false });
       document.getElementById('elections-list').innerHTML = (elections || []).map(e => `
         <div class="card">
-          <h3>${escapeHtml(e.title)}</h3>
+          <h3>${escapeHtml(e.title)} <span class="pill pill-${e.status === 'closed' ? 'rejected' : 'active'}">${e.status}</span></h3>
           <p style="color:var(--text-muted); font-size:0.85rem;">${new Date(e.start_date).toLocaleString()} – ${new Date(e.end_date).toLocaleString()}</p>
+          <p style="color:var(--text-muted); font-size:0.8rem;">Editing dates/status, candidate approval, and closing this election are Super Admin actions.</p>
         </div>
       `).join('') || `<p style="text-align:center;color:var(--text-muted);">No elections scheduled.</p>`;
     }
+
+    document.getElementById('new-election-btn').addEventListener('click', () => {
+      const form = document.getElementById('new-election-form');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    });
+    document.getElementById('create-election-btn').addEventListener('click', async () => {
+      const title = document.getElementById('ne-title').value.trim();
+      const start = document.getElementById('ne-start').value;
+      const end = document.getElementById('ne-end').value;
+      if (!title || !start || !end) return flash('Title, start, and end date are required.', 'error');
+      const payload = {
+        title,
+        start_date: new Date(start).toISOString(),
+        end_date: new Date(end).toISOString(),
+        description: document.getElementById('ne-desc').value.trim() || null,
+        created_by: admin.id,
+      };
+      const { error } = await supabase.from('elections').insert(payload);
+      if (error) return flash(error.message, 'error');
+      flash('Election created as a draft. Ask the Super Admin to schedule/open it.');
+      document.getElementById('new-election-form').style.display = 'none';
+      loadElections();
+    });
     // Toggle Form Visibility
 const toggleUserBtn = document.getElementById('toggle-add-user-btn');
 const addUserForm = document.getElementById('add-user-form');
@@ -1007,8 +1006,6 @@ addUserForm.addEventListener('submit', async (e) => {
     loadMembers();
     loadContentManagement();
     loadSavingsGroups();
-    loadSavingsApprovals();
-    loadWithdrawals();
     loadElections();
   </script>
 </body>

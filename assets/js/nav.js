@@ -53,16 +53,19 @@ export async function mountNav(activeKey = '') {
     return;
   }
 
-  const { data: profile } = await supabase.from('profiles').select('full_name, role, profile_photo_url, status').eq('id', session.user.id).single();
-  const isAdmin = profile?.role === 'admin';
+  const { data: profile } = await supabase.from('profiles').select('full_name, role, profile_photo_url, status, is_super_admin').eq('id', session.user.id).single();
+  const isAdmin = profile?.role === 'admin' || profile?.is_super_admin;
+  const isSuperAdmin = !!profile?.is_super_admin;
 
   const links = [
     { key: 'dashboard', href: `${BASE_URL}/dashboard.html`, label: 'Dashboard' },
     { key: 'savings', href: `${BASE_URL}/savings/dashboard.html`, label: 'Savings' },
     { key: 'elections', href: `${BASE_URL}/elections/index.html`, label: 'Elections' },
     { key: 'leadership', href: `${BASE_URL}/leadership.html`, label: 'Leadership' },
+    { key: 'feedback', href: `${BASE_URL}/feedback.html`, label: 'Feedback' },
   ];
   if (isAdmin) links.push({ key: 'admin', href: `${BASE_URL}/admin/index.html`, label: 'Admin Panel' });
+  if (isSuperAdmin) links.push({ key: 'super-admin', href: `${BASE_URL}/admin/super-admin.html`, label: 'Super Admin' });
 
   mount.innerHTML = `
     <nav class="site-nav">
@@ -78,6 +81,7 @@ export async function mountNav(activeKey = '') {
             <a href="${BASE_URL}/profile.html">My Profile</a>
             <a href="${BASE_URL}/savings/dashboard.html">My Savings</a>
             ${isAdmin ? `<a href="${BASE_URL}/admin/index.html">Admin Panel</a>` : ''}
+            ${isSuperAdmin ? `<a href="${BASE_URL}/admin/super-admin.html">Super Admin</a>` : ''}
             <button type="button" id="nav-signout-btn">Sign Out</button>
           </div>
         </div>

@@ -14,10 +14,16 @@
 
 <div class="auth-wrap savings-content">
   <div class="auth-card" style="max-width:440px;text-align:center;">
-    <h2 id="group-title">Loading...</h2>
+    <span class="eyebrow" style="display:block;margin-bottom:0.5rem;">Monthly contribution</span>
+    <h2 id="group-title">Loading…</h2>
     <p class="subtitle" id="month-label"></p>
+    <div id="amount-display" style="display:none;margin:1rem 0 1.25rem;">
+      <div style="font-size:0.8rem;color:var(--text-muted);">Amount due</div>
+      <div class="savings-balance" id="amount-value"></div>
+    </div>
     <div id="alert-box"></div>
-    <button type="button" class="btn btn-gold btn-block" id="pay-btn" style="display:none;">Pay Monthly Contribution</button>
+    <button type="button" class="btn btn-gold btn-block" id="pay-btn" style="display:none;">Pay monthly contribution</button>
+    <p style="margin-top:1.25rem;font-size:0.85rem;"><a href="dashboard.html">← Back to My Savings</a></p>
   </div>
 </div>
 
@@ -37,7 +43,10 @@
   const groupId = new URLSearchParams(window.location.search).get('group');
   mountSavingsSidebar('contribute', groupId);
   const alertBox = document.getElementById('alert-box');
-  if (!groupId) { alertBox.innerHTML = `<div class="alert alert-error">No group specified.</div>`; throw new Error('no group'); }
+  if (!groupId) {
+    alertBox.innerHTML = `<div class="alert alert-error">No group specified. Open Contribute from your dashboard.</div>`;
+    throw new Error('no group');
+  }
 
   const result = await requireActiveSavingsGroup();
   if (!result) throw new Error('redirecting');
@@ -52,9 +61,12 @@
   const now = new Date();
   const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const amount = Number(group.monthly_contribution);
 
   document.getElementById('group-title').textContent = group.name;
-  document.getElementById('month-label').textContent = `Contribution for ${monthLabel} — fixed at UGX ${Number(group.monthly_contribution).toLocaleString()}`;
+  document.getElementById('month-label').textContent = `Contribution for ${monthLabel}`;
+  document.getElementById('amount-display').style.display = 'block';
+  document.getElementById('amount-value').textContent = `UGX ${amount.toLocaleString()}`;
 
   const { data: existing } = await supabase
     .from('savings_transactions')
@@ -65,15 +77,25 @@
 
   const payBtn = document.getElementById('pay-btn');
   if (existing?.status === 'completed') {
-    alertBox.innerHTML = `<div class="alert alert-success">You've already contributed for ${monthLabel}. Thank you!</div>`;
+    alertBox.innerHTML = `<div class="alert alert-success">You\'ve already contributed for ${monthLabel}. Thank you!</div>`;
   } else if (existing?.status === 'pending') {
-    alertBox.innerHTML = `<div class="alert alert-error">A payment for this month is already processing. If it doesn't confirm within a few minutes, contact an admin.</div>`;
+    alertBox.innerHTML = `<div class="alert alert-error">A payment for this month is already processing. If it doesn\'t confirm within a few minutes, contact an admin.</div>`;
   } else {
     payBtn.style.display = 'block';
     payBtn.addEventListener('click', async () => {
-      payBtn.disabled = true; payBtn.textContent = 'Opening secure checkout...';
-      await paySavingsContribution({ group, monthYear, amount: Number(group.monthly_contribution), currency: group.currency || 'UGX' });
-      payBtn.disabled = false; payBtn.textContent = 'Pay Monthly Contribution';
+      payBtn.disabled = true;
+      payBtn.textContent = 'Opening secure checkout…';
+      try {
+        await paySavingsContribution({
+          group,
+          monthYear,
+          amount,
+          currency: group.currency || 'UGX',
+        });
+      } finally {
+        payBtn.disabled = false;
+        payBtn.textContent = 'Pay monthly contribution';
+      }
     });
   }
 </script>
