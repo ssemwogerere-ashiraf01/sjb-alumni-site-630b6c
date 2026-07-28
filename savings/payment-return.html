@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Confirming payment — SJB Association</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+<div id="app-nav"></div>
+<div class="section" style="max-width:32rem;margin:3rem auto;text-align:center;">
+  <div class="card" style="padding:2rem;">
+    <h2 style="margin-top:0;">Confirming your payment…</h2>
+    <p id="status-msg" style="color:var(--text-muted);">Please wait while we verify with Flutterwave.</p>
+    <div id="alert-box" style="margin-top:1rem;"></div>
+    <p style="margin-top:1.5rem;font-size:0.85rem;color:var(--text-muted);">
+      Do not close this page. You will be redirected automatically.
+    </p>
+  </div>
+</div>
+<div id="app-footer"></div>
+<script type="module">
+  import { mountNav, mountFooter } from '../assets/js/nav.js';
+  import { BASE_URL } from '../assets/js/site-config.js';
+  import {
+    loadPending,
+    clearPending,
+    verifyWithServer,
+  } from '../assets/js/flutterwave.js';
+  import { supabase } from '../assets/js/supabase-client.js';
+
+  mountNav('savings');
+  mountFooter();
+
+  const statusMsg = document.getElementById('status-msg');
+  const alertBox = document.getElementById('alert-box');
+
+  const params = new URLSearchParams(window.location.search);
+  // Flutterwave appends status / tx_ref / transaction_id on redirect.
+  const flwStatus = (params.get('status') || params.get('status') || '').toLowerCase();
+  const flwTxRef = params.get('tx_ref') || params.get('txRef') || null;
+
+  const pending = loadPending();
+
+  if (!pending && !flwTxRef) {
+    statusMsg.textContent = 'No pending payment found.';
+    alertBox.innerHTML = `<div class="alert alert-error">We could not find a payment to confirm. If you were charged, contact an admin with your receipt.</div>
+      <p><a class="btn btn-gold" href="${BASE_URL}/savings/register.html">Back to savings groups</a></p>`;
+  } else {
+    const tx_ref = pending?.tx_ref || flwTxRef;
+    const kind = pending?.kind;
+    const group_id = pending?.group_id || null;
+    const month_year = pending?.month_year || null;
+    const successPath = pending?.successPath || `${BASE_URL}/savings/register.html?paid=1`;
+
+    if (flwStatus && !['successful', 'completed', 'success'].includes(flwStatus)) {
+      clearPending();
+      statusMsg.textContent = 'Payment was not completed.';
+      alertBox.innerHTML = `<div class="alert alert-error">Flutterwave reported status: <strong>${flwStatus}</strong>. Reference: ${tx_ref || '—'}</div>
+        <p><a class="btn btn-gold" href="${BASE_URL}/savings/register.html">Try again</a></p>`;
+    } else if (!kind) {
+      // We have tx_ref from URL but lost sessionStorage (new tab / different origin).
+      statusMsg.textContent = 'Payment reference received, but session details were lost.';
+      alertBox.innerHTML = `<div class="alert alert-error">Please return to the savings page and wait a moment, or ask an admin to confirm reference <code>${tx_ref}</code>.</div>
+        <p><a class="btn btn-gold" href="${BASE_URL}/savings/register.html">Back to groups</a></p>`;
+    } else {
+      // Ensure session still exists
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        window.location.href = `${BASE_URL}/login.html?next=${encodeURIComponent(window.location.href)}`;
+        throw new Error('redirecting');
+      }
+
+      statusMsg.textContent = 'Contacting verification server…';
+      // Retry for up to ~3 minutes — Flutterwave can lag right after OTP.
+      const deadline = Date.now() + 3 * 60 * 1000;
+      let result = { error: 'Verification not attempted yet.' };
+      let attempt = 0;
+      while (Date.now() < deadline) {
+        attempt += 1;
+        statusMsg.textContent = `Confirming with Flutterwave (attempt ${attempt})…`;
+        result = await verifyWithServer({ tx_ref, kind, group_id, month_year });
+        if (result.success) break;
+        // Wait 15s between tries (except last)
+        if (Date.now() + 15000 < deadline) {
+          await new Promise(r => setTimeout(r, 15000));
+        } else {
+          break;
+        }
+      }
+
+      if (result.success) {
+        clearPending();
+        statusMsg.textContent = 'Payment confirmed! Redirecting…';
+        alertBox.innerHTML = `<div class="alert alert-success">${result.note || 'Payment confirmed. Your fee is marked paid.'}</div>`;
+        setTimeout(() => { window.location.href = successPath; }, 900);
+      } else {
+        statusMsg.textContent = 'Could not confirm payment yet.';
+        const backHref = kind === 'membership' ? `${BASE_URL}/membership-payment.html` : `${BASE_URL}/savings/register.html`;
+        alertBox.innerHTML = `<div class="alert alert-error">${result.error || 'Verification failed.'}<br/>Reference: <code>${tx_ref}</code></div>
+          <p style="margin-top:1rem;">
+            <button type="button" class="btn btn-gold" id="retry-btn">Retry verification</button>
+            <a class="btn btn-outline-light" href="${backHref}" style="margin-left:0.5rem;">Back</a>
+          </p>
+          <p class="empty-note" style="margin-top:0.75rem;">If money left your account, keep this reference and contact an admin. The system will keep trying verification when you click Retry.</p>`;
+        document.getElementById('retry-btn')?.addEventListener('click', () => location.reload());
+      }
+    }
+  }
+</script>
+</body>
+</html>

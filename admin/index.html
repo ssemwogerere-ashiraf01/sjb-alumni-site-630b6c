@@ -62,6 +62,7 @@
 
     <!-- Stats Summary Row -->
     <div class="stat-grid" id="stat-row"></div>
+  <div id="admin-alerts" style="margin:0 0 1rem;"></div>
 <!-- Add New Member (always visible, independent of which tab is active) -->
 <div class="card" style="margin-bottom: 1.5rem;">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
@@ -385,19 +386,71 @@
     });
 
     // ---------- Stat row ----------
-    async function loadStats() {
-      const [{ count: totalMembers }, { count: pendingApprovals }, { count: pendingSavings }, { count: pendingWithdrawals }] = await Promise.all([
+        async function loadStats() {
+      const [
+        { count: totalMembers },
+        { count: pendingApprovals },
+        { count: unpaidFees },
+        { count: pendingSavings },
+        { count: pendingWithdrawals },
+      ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'approved').eq('membership_fee_paid', false),
         supabase.from('savings_group_members').select('*', { count: 'exact', head: true }).eq('status', 'pending').eq('join_fee_paid', true),
         supabase.from('savings_transactions').select('*', { count: 'exact', head: true }).eq('type', 'withdrawal').eq('status', 'pending'),
       ]);
       document.getElementById('stat-row').innerHTML = `
         <div class="stat-box"><strong>${totalMembers ?? 0}</strong><span>Total Members</span></div>
-        <div class="stat-box"><strong>${pendingApprovals ?? 0}</strong><span>Awaiting Approval</span></div>
+        <div class="stat-box" id="stat-pending-approvals" style="cursor:pointer;" title="Show pending applications">
+          <strong>${pendingApprovals ?? 0}</strong><span>Awaiting Approval</span>
+        </div>
+        <div class="stat-box" id="stat-unpaid-fees" style="cursor:pointer;" title="Approved members who still owe the membership fee">
+          <strong>${unpaidFees ?? 0}</strong><span>Unpaid Membership Fee</span>
+        </div>
         <div class="stat-box"><strong>${pendingSavings ?? 0}</strong><span>Savings Activations</span></div>
-        <div class="stat-box"><strong>${pendingWithdrawals ?? 0}</strong><span>Withdrawal Requests</span></div>
       `;
+
+      // In-dashboard alerts so admins see work waiting for them.
+      const alerts = document.getElementById('admin-alerts');
+      if (alerts) {
+        const bits = [];
+        if ((pendingApprovals ?? 0) > 0) {
+          bits.push(`<div class="alert alert-error" style="margin-bottom:0.5rem;">
+            <strong>${pendingApprovals} application(s)</strong> waiting for account approval.
+            <button type="button" class="mini-btn good" id="btn-show-pending" style="margin-left:0.5rem;">Review pending</button>
+          </div>`);
+        }
+        if ((unpaidFees ?? 0) > 0) {
+          bits.push(`<div class="alert" style="margin-bottom:0.5rem;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;">
+            <strong>${unpaidFees} approved member(s)</strong> still have an unpaid membership fee (alumni UGX 3,000 / non-alumni UGX 15,000).
+            They will see a pay prompt until the fee is paid (or you mark it paid).
+            <button type="button" class="mini-btn" id="btn-show-unpaid" style="margin-left:0.5rem;">Show unpaid</button>
+          </div>`);
+        }
+        alerts.innerHTML = bits.join('') || '';
+        document.getElementById('btn-show-pending')?.addEventListener('click', () => {
+          document.getElementById('status-filter').value = 'pending';
+          document.querySelector('[data-tab="members"]')?.click();
+          loadMembers();
+        });
+        document.getElementById('btn-show-unpaid')?.addEventListener('click', () => {
+          document.getElementById('status-filter').value = 'approved';
+          document.querySelector('[data-tab="members"]')?.click();
+          loadMembers().then(() => {
+            // Soft highlight unpaid rows if present
+            document.querySelectorAll('#members-tbody tr').forEach(tr => {
+              if (tr.textContent.includes('Unpaid')) tr.style.background = '#fff7ed';
+            });
+          });
+        });
+        document.getElementById('stat-pending-approvals')?.addEventListener('click', () => {
+          document.getElementById('btn-show-pending')?.click();
+        });
+        document.getElementById('stat-unpaid-fees')?.addEventListener('click', () => {
+          document.getElementById('btn-show-unpaid')?.click();
+        });
+      }
     }
 
     // ---------- Members tab ----------
@@ -467,6 +520,15 @@
 
     document.getElementById('member-search').addEventListener('input', debounce(loadMembers, 350));
     document.getElementById('status-filter').addEventListener('change', loadMembers);
+
+    // First visit: if anyone is awaiting approval, land the admin on that list.
+    (async () => {
+      const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+      if ((count ?? 0) > 0) {
+        document.getElementById('status-filter').value = 'pending';
+        loadMembers();
+      }
+    })();
 
     // ---------- Content Management Section ----------
     const ACCEPT_MAP = {

@@ -61,6 +61,14 @@
   .form-group label { display: block; font-weight: 600; margin-bottom: 0.35rem; font-size: 0.88rem; }
   .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; }
   .action-select { padding: 0.35rem; border-radius: 4px; border: 1px solid var(--border); font-size: 0.85rem; }
+  .member-avatar-img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; display: block; }
+  .member-avatar-fallback {
+    width: 36px; height: 36px; border-radius: 50%; background: var(--forest); color: #fff;
+    font-weight: 700; font-size: 0.8rem; display: flex; align-items: center; justify-content: center;
+  }
+  .member-name-cell { display: flex; align-items: center; gap: 0.65rem; }
+  .photo-cell { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; min-width: 56px; }
+  .photo-cell .mini-btn { padding: 0.2rem 0.45rem; font-size: 0.72rem; }
 </style>
 </head>
 <body>
@@ -95,6 +103,7 @@
       <table>
         <thead>
           <tr>
+            <th>Photo</th>
             <th>Name</th>
             <th>Email</th>
             <th>Role</th>
@@ -102,9 +111,11 @@
             <th>Delete</th>
           </tr>
         </thead>
-        <tbody id="members-tbody"><tr><td colspan="5" class="empty-note">Loading members...</td></tr></tbody>
+        <tbody id="members-tbody"><tr><td colspan="6" class="empty-note">Loading members...</td></tr></tbody>
       </table>
     </div>
+    <input type="file" id="sa-photo-file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+    <p class="empty-note" style="margin:0.75rem 0 0;">You can set a member's profile photo for them if their own upload fails — use the Set / Change button under their photo.</p>
   </div>
   </div>
 
@@ -118,10 +129,10 @@
   <div class="tab-panel" id="tab-savings">
     <div class="card">
       <h3 style="margin-top:0;">Savings Groups</h3>
-      <p class="empty-note">New groups are created from the regular Admin Dashboard. Editing amounts, activating/deactivating, and deleting a group happens here.</p>
+      <p class="empty-note">New groups are created from the regular Admin Dashboard. Editing amounts, activating/deactivating, and deleting a group happens here. Members who paid the join fee appear under <strong>Approvals &amp; Financials</strong> until you Activate them.</p>
       <div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Name</th><th>Monthly</th><th>Join Fee</th><th>Max Members</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Monthly</th><th>Join Fee</th><th>Members</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody id="sa-groups-tbody"><tr><td colspan="6" class="empty-note">Loading...</td></tr></tbody>
         </table>
       </div>
@@ -227,15 +238,42 @@
   }
 
   let allMembers = [];
+  let profileById = {};
+  let savingsGroups = [];
+  let elections = [];
+  let candidatesByElection = {};
 
-  await loadStats();
-  await loadMembers();
-  await loadContentManagement();
-  await loadSavingsGroupsTab();
-  await loadElectionsTab();
-  await loadSavingsApprovals();
-  await loadWithdrawals();
-  await loadFeedbackSummary();
+  // Must be declared before any loader runs (top-level await below).
+  const CONTENT_TABLE_MAP = {
+    news: 'news', events: 'events', jobs: 'jobs',
+    forumTopics: 'forum_topics', forumReplies: 'forum_replies', announcements: 'savings_announcements',
+  };
+  const CONTENT_TITLES = {
+    news: 'News', events: 'Events', jobs: 'Jobs',
+    forumTopics: 'Forum Topics', forumReplies: 'Forum Replies', announcements: 'Savings Announcements',
+  };
+
+  // Load each tab independently so one failed query cannot blank the rest.
+  async function safeLoad(label, fn) {
+    try {
+      await fn();
+    } catch (err) {
+      console.error(`[super-admin] ${label} failed:`, err);
+      flash(`${label} failed to load: ${err?.message || err}`, 'error');
+    }
+  }
+
+  // Load tabs in parallel so a hung Content query cannot leave Savings on "Loading..."
+  await Promise.all([
+    safeLoad('Stats', loadStats),
+    safeLoad('Members', loadMembers),
+    safeLoad('Content', loadContentManagement),
+    safeLoad('Savings groups', loadSavingsGroupsTab),
+    safeLoad('Elections', loadElectionsTab),
+    safeLoad('Savings approvals', loadSavingsApprovals),
+    safeLoad('Withdrawals', loadWithdrawals),
+    safeLoad('Feedback summary', loadFeedbackSummary),
+  ]);
 
   document.getElementById('member-search').addEventListener('input', debounce(renderMembers, 250));
 
@@ -254,17 +292,33 @@
     `;
   }
 
+  function initials(name) {
+    if (!name) return '?';
+    return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
+  }
+
+  function memberAvatarHtml(m) {
+    if (m.profile_photo_url) {
+      return `<img src="${escapeHtml(m.profile_photo_url)}" alt="${escapeHtml(m.full_name || '')}" class="member-avatar-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span class="member-avatar-fallback" style="display:none;">${escapeHtml(initials(m.full_name))}</span>`;
+    }
+    return `<span class="member-avatar-fallback">${escapeHtml(initials(m.full_name))}</span>`;
+  }
+
   async function loadMembers() {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, email, role, is_super_admin')
+      .select('id, full_name, email, role, is_super_admin, profile_photo_url')
       .order('full_name', { ascending: true });
 
     if (error) {
-      document.getElementById('members-tbody').innerHTML = `<tr><td colspan="5" class="empty-note">Could not load members: ${escapeHtml(error.message)}</td></tr>`;
+      document.getElementById('members-tbody').innerHTML = `<tr><td colspan="6" class="empty-note">Could not load members: ${escapeHtml(error.message)}</td></tr>`;
       return;
     }
     allMembers = data || [];
+    // Keep the shared profile map in sync for other tabs.
+    (allMembers || []).forEach(m => {
+      profileById[m.id] = { id: m.id, full_name: m.full_name, email: m.email };
+    });
     renderMembers();
   }
 
@@ -276,12 +330,18 @@
 
     const tbody = document.getElementById('members-tbody');
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="empty-note">No members match that search.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-note">No members match that search.</td></tr>`;
       return;
     }
 
     tbody.innerHTML = rows.map(m => `
       <tr data-id="${m.id}">
+        <td>
+          <div class="photo-cell">
+            ${memberAvatarHtml(m)}
+            <button type="button" class="mini-btn neutral" data-set-photo="${m.id}" data-member-name="${escapeHtml(m.full_name)}">${m.profile_photo_url ? 'Change' : 'Set'}</button>
+          </div>
+        </td>
         <td>${escapeHtml(m.full_name)}</td>
         <td>${escapeHtml(m.email)}</td>
         <td>
@@ -319,7 +379,67 @@
         btn.dataset.memberName
       ));
     });
+    tbody.querySelectorAll('button[data-set-photo]').forEach(btn => {
+      btn.addEventListener('click', () => openPhotoPicker(btn.dataset.setPhoto, btn.dataset.memberName));
+    });
   }
+
+  let pendingPhotoUserId = null;
+
+  function openPhotoPicker(userId, memberName) {
+    pendingPhotoUserId = userId;
+    const input = document.getElementById('sa-photo-file');
+    input.value = '';
+    input.click();
+  }
+
+  document.getElementById('sa-photo-file')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    const userId = pendingPhotoUserId;
+    pendingPhotoUserId = null;
+    if (!file || !userId) return;
+
+    if (!file.type.startsWith('image/')) {
+      flash('Please choose an image file (JPG, PNG, WEBP, or GIF).', 'error');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      flash('Image must be 10MB or smaller.', 'error');
+      return;
+    }
+
+    const member = allMembers.find(m => m.id === userId);
+    flash(`Uploading photo for ${member?.full_name || 'member'}...`);
+
+    try {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      // Same folder convention as profile.html: avatars/<user_id>/photo.<ext>
+      const path = `${userId}/photo.${ext}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true, cacheControl: '3600', contentType: file.type || undefined });
+      if (uploadErr) throw uploadErr;
+
+      const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+      const freshUrl = `${pub.publicUrl}?t=${Date.now()}`;
+
+      const { error: dbErr } = await supabase
+        .from('profiles')
+        .update({ profile_photo_url: freshUrl })
+        .eq('id', userId);
+      if (dbErr) throw dbErr;
+
+      flash(`Photo updated for ${member?.full_name || 'member'}.`);
+      await loadMembers();
+    } catch (err) {
+      const msg = err?.message || String(err);
+      const hint = /row-level security|policy|not allowed|unauthorized/i.test(msg)
+        ? ' Run sql/016_avatar_admin_upload.sql in Supabase so the super admin can write into other members\' avatar folders.'
+        : '';
+      flash(`Photo upload failed: ${msg}${hint}`, 'error');
+    }
+  });
 
   async function updateRole(id) {
     const select = document.querySelector(`select[data-role-select="${id}"]`);
@@ -383,54 +503,159 @@
   }
 
   // =====================================================================
+  // Shared: resolve profile names without nested embeds.
+  // Tables like savings_group_members / savings_transactions / candidates
+  // have more than one FK to profiles (user_id + approved_by), so
+  // `profiles(full_name)` embeds often fail with "more than one
+  // relationship". We load profiles once and join client-side instead.
+  // (profileById is declared near the top of this script.)
+  // =====================================================================
+  async function ensureProfileMap(ids = []) {
+    const missing = [...new Set(ids.filter(Boolean).filter(id => !profileById[id]))];
+    if (!missing.length && Object.keys(profileById).length) return profileById;
+
+    // Prefer a bulk load when the map is empty (covers members tab too).
+    if (!Object.keys(profileById).length) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email');
+      if (!error && data) {
+        profileById = Object.fromEntries(data.map(p => [p.id, p]));
+        return profileById;
+      }
+    }
+
+    if (missing.length) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', missing);
+      (data || []).forEach(p => { profileById[p.id] = p; });
+    }
+    return profileById;
+  }
+
+  function profileName(userId) {
+    return profileById[userId]?.full_name || '—';
+  }
+  function profileEmail(userId) {
+    return profileById[userId]?.email || '—';
+  }
+
+  // =====================================================================
   // CONTENT — publish/hide + delete for news, events, jobs, forum posts,
   // and savings announcements. Creating new items is a regular-admin task
   // (see admin/index.html); this dashboard only edits/removes what exists.
   // =====================================================================
-  const CONTENT_TABLE_MAP = {
-    news: 'news', events: 'events', jobs: 'jobs',
-    forumTopics: 'forum_topics', forumReplies: 'forum_replies', announcements: 'savings_announcements',
-  };
-  const CONTENT_TITLES = {
-    news: 'News', events: 'Events', jobs: 'Jobs',
-    forumTopics: 'Forum Topics', forumReplies: 'Forum Replies', announcements: 'Savings Announcements',
-  };
-
   async function loadContentManagement() {
+    // Use select('*') so optional columns (media_type, doc_url, …) never
+    // break the whole tab if a migration is missing on the project.
     const [newsRes, eventsRes, jobsRes, topicsRes, repliesRes, announcementsRes] = await Promise.all([
-      supabase.from('news').select('id, title, category, is_active, published_at').order('published_at', { ascending: false }).limit(15),
-      supabase.from('events').select('id, title, event_date, location, is_active').order('event_date', { ascending: false }).limit(15),
-      supabase.from('jobs').select('id, title, company, is_active, posted_at').order('posted_at', { ascending: false }).limit(15),
-      supabase.from('forum_topics').select('id, title, category, is_locked, is_active, created_at').order('created_at', { ascending: false }).limit(15),
-      supabase.from('forum_replies').select('id, content, is_active, created_at, forum_topics(title)').order('created_at', { ascending: false }).limit(15),
-      supabase.from('savings_announcements').select('id, title, is_pinned, is_active, posted_at, savings_groups(name)').order('posted_at', { ascending: false }).limit(15),
+      supabase.from('news').select('*').order('published_at', { ascending: false }).limit(50),
+      supabase.from('events').select('*').order('event_date', { ascending: false }).limit(50),
+      supabase.from('jobs').select('*').order('posted_at', { ascending: false }).limit(50),
+      supabase.from('forum_topics').select('*').order('created_at', { ascending: false }).limit(50),
+      supabase.from('forum_replies').select('*').order('created_at', { ascending: false }).limit(50),
+      supabase.from('savings_announcements').select('*').order('posted_at', { ascending: false }).limit(50),
     ]);
 
-    const sections = { news: newsRes, events: eventsRes, jobs: jobsRes, forumTopics: topicsRes, forumReplies: repliesRes, announcements: announcementsRes };
+    // Resolve topic titles and group names without fragile nested embeds.
+    const topicIds = [...new Set((repliesRes.data || []).map(r => r.topic_id).filter(Boolean))];
+    const groupIds = [...new Set((announcementsRes.data || []).map(a => a.group_id).filter(Boolean))];
+    const topicTitleById = {};
+    const groupNameById = {};
+
+    if (topicIds.length) {
+      const { data: topics } = await supabase.from('forum_topics').select('id, title').in('id', topicIds);
+      (topics || []).forEach(t => { topicTitleById[t.id] = t.title; });
+    }
+    if (groupIds.length) {
+      const { data: groups } = await supabase.from('savings_groups').select('id, name').in('id', groupIds);
+      (groups || []).forEach(g => { groupNameById[g.id] = g.name; });
+    }
+
+    const sections = {
+      news: newsRes,
+      events: eventsRes,
+      jobs: jobsRes,
+      forumTopics: topicsRes,
+      forumReplies: repliesRes,
+      announcements: announcementsRes,
+    };
+
+    function secondaryCell(kind, r) {
+      if (kind === 'news') return escapeHtml(r.category || '—');
+      if (kind === 'events') {
+        const when = r.event_date ? new Date(r.event_date).toLocaleString() : '—';
+        return escapeHtml(`${when}${r.location ? ' · ' + r.location : ''}`);
+      }
+      if (kind === 'jobs') return escapeHtml([r.company, r.job_type, r.location].filter(Boolean).join(' · ') || '—');
+      if (kind === 'forumTopics') return escapeHtml(r.category || '—') + (r.is_locked ? ' · locked' : '');
+      if (kind === 'forumReplies') return escapeHtml(topicTitleById[r.topic_id] || '—');
+      if (kind === 'announcements') {
+        return escapeHtml(r.group_id ? (groupNameById[r.group_id] || 'Group') : 'Association-wide')
+          + (r.is_pinned ? ' · pinned' : '');
+      }
+      return '—';
+    }
+
+    function titleCell(kind, r) {
+      if (kind === 'forumReplies') {
+        const snippet = (r.content || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+        return escapeHtml(snippet || '—');
+      }
+      return escapeHtml(r.title || '—');
+    }
+
+    function extraCells(kind, r) {
+      // Mirror admin/index media columns where relevant.
+      if (['news', 'events', 'jobs'].includes(kind)) {
+        const type = r.media_type
+          ? `<td><span class="pill pill-pending">${escapeHtml(r.media_type)}</span></td>`
+          : '<td>—</td>';
+        const att = r.doc_url
+          ? `<td><a href="${escapeHtml(r.doc_url)}" target="_blank" rel="noopener" style="font-weight:600;color:var(--forest);">View</a></td>`
+          : '<td>—</td>';
+        return type + att;
+      }
+      return '';
+    }
+
+    function headerFor(kind) {
+      if (['news', 'events', 'jobs'].includes(kind)) {
+        return '<tr><th>Title</th><th>Details</th><th>Type</th><th>Attachment</th><th>Status</th><th>Actions</th></tr>';
+      }
+      if (kind === 'forumReplies') {
+        return '<tr><th>Reply</th><th>Topic</th><th>Status</th><th>Actions</th></tr>';
+      }
+      return '<tr><th>Title</th><th>Details</th><th>Status</th><th>Actions</th></tr>';
+    }
 
     document.getElementById('content-sections').innerHTML = Object.entries(sections).map(([kind, res]) => {
       if (res.error) {
         return `<div class="card"><h3 style="margin-top:0;">${CONTENT_TITLES[kind]}</h3><div class="empty-note">Could not load: ${escapeHtml(res.error.message)}</div></div>`;
       }
       const rows = res.data || [];
+      const colSpan = ['news', 'events', 'jobs'].includes(kind) ? 6 : 4;
       const rowsHtml = rows.map(r => `
         <tr>
-          <td>${escapeHtml(r.title || r.content?.slice(0, 60) || r.forum_topics?.title || '—')}</td>
-          <td>${escapeHtml(r.category || r.company || r.location || r.savings_groups?.name || '—')}</td>
+          <td>${titleCell(kind, r)}</td>
+          <td>${secondaryCell(kind, r)}</td>
+          ${extraCells(kind, r)}
           <td><span class="pill ${r.is_active ? 'pill-active' : 'pill-rejected'}">${r.is_active ? 'active' : 'hidden'}</span></td>
           <td>${actionSelectHtml(kind, r.id, [
             { value: r.is_active ? 'hide' : 'publish', label: r.is_active ? 'Hide' : 'Publish' },
             { value: 'delete', label: 'Delete' },
           ])}</td>
         </tr>
-      `).join('') || `<tr><td colspan="4" class="empty-note">No records found.</td></tr>`;
+      `).join('') || `<tr><td colspan="${colSpan}" class="empty-note">No records found.</td></tr>`;
 
       return `
         <div class="card">
-          <h3 style="margin-top:0;">${CONTENT_TITLES[kind]}</h3>
+          <h3 style="margin-top:0;">${CONTENT_TITLES[kind]} <span class="empty-note" style="font-weight:400;">(${rows.length})</span></h3>
           <div style="overflow-x:auto;">
             <table>
-              <thead><tr><th>Title</th><th>Category / Group</th><th>Status</th><th>Actions</th></tr></thead>
+              <thead>${headerFor(kind)}</thead>
               <tbody>${rowsHtml}</tbody>
             </table>
           </div>
@@ -459,29 +684,68 @@
   // =====================================================================
   // SAVINGS GROUPS — edit (amounts), activate/deactivate, delete.
   // =====================================================================
-  let savingsGroups = [];
-
   async function loadSavingsGroupsTab() {
-    const { data, error } = await supabase.from('savings_groups').select('*').order('created_at', { ascending: false });
+    const tbody = document.getElementById('sa-groups-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-note">Loading savings groups...</td></tr>`;
+
+    let data = null;
+    let error = null;
+    try {
+      const res = await supabase
+        .from('savings_groups')
+        .select('id, name, description, monthly_contribution, group_join_fee, max_members, is_active, currency, created_at')
+        .order('created_at', { ascending: false });
+      data = res.data;
+      error = res.error;
+    } catch (err) {
+      error = err;
+    }
     if (error) {
-      document.getElementById('sa-groups-tbody').innerHTML = `<tr><td colspan="6" class="empty-note">Could not load: ${escapeHtml(error.message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-note">Could not load: ${escapeHtml(error.message || String(error))}</td></tr>`;
       return;
     }
     savingsGroups = data || [];
-    document.getElementById('sa-groups-tbody').innerHTML = savingsGroups.map(g => `
+
+    // Active member counts per group (same idea as admin dashboard).
+    const memberCountByGroup = {};
+    if (savingsGroups.length) {
+      const { data: memberships, error: memErr } = await supabase
+        .from('savings_group_members')
+        .select('group_id, status')
+        .eq('status', 'active');
+      if (memErr) console.warn('Member count load failed:', memErr);
+      (memberships || []).forEach(m => {
+        memberCountByGroup[m.group_id] = (memberCountByGroup[m.group_id] || 0) + 1;
+      });
+    }
+
+    if (!savingsGroups.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-note">No savings groups found. Create one from the regular Admin Dashboard.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = savingsGroups.map(g => {
+      const activeCount = memberCountByGroup[g.id] || 0;
+      const max = g.max_members ?? '—';
+      const isActive = g.is_active !== false;
+      return `
       <tr>
-        <td><strong>${escapeHtml(g.name)}</strong></td>
-        <td>${g.currency || 'UGX'} ${Number(g.monthly_contribution).toLocaleString()}</td>
-        <td>${g.currency || 'UGX'} ${Number(g.group_join_fee).toLocaleString()}</td>
-        <td>${g.max_members ?? '—'}</td>
-        <td><span class="pill ${g.is_active ? 'pill-active' : 'pill-rejected'}">${g.is_active ? 'active' : 'inactive'}</span></td>
+        <td>
+          <strong>${escapeHtml(g.name)}</strong>
+          ${g.description ? `<div class="empty-note" style="font-size:0.78rem;">${escapeHtml(g.description)}</div>` : ''}
+        </td>
+        <td>${g.currency || 'UGX'} ${Number(g.monthly_contribution ?? 0).toLocaleString()}</td>
+        <td>${g.currency || 'UGX'} ${Number(g.group_join_fee ?? 0).toLocaleString()}</td>
+        <td>${activeCount} / ${max}</td>
+        <td><span class="pill ${isActive ? 'pill-active' : 'pill-rejected'}">${isActive ? 'active' : 'inactive'}</span></td>
         <td>${actionSelectHtml('savings-group', g.id, [
           { value: 'edit', label: 'Edit Amounts' },
-          { value: g.is_active ? 'deactivate' : 'activate', label: g.is_active ? 'Deactivate' : 'Activate' },
+          { value: isActive ? 'deactivate' : 'activate', label: isActive ? 'Deactivate' : 'Activate' },
           { value: 'delete', label: 'Delete' },
         ])}</td>
-      </tr>
-    `).join('') || `<tr><td colspan="6" class="empty-note">No savings groups found.</td></tr>`;
+      </tr>`;
+    }).join('');
   }
 
   async function handleSavingsGroupAction(action, id) {
@@ -521,27 +785,49 @@
   // ELECTIONS — status changes, candidate approval, delete, close +
   // auto-promote winners.
   // =====================================================================
-  let elections = [];
-  let candidatesByElection = {};
-
   async function loadElectionsTab() {
-    const { data, error } = await supabase.from('elections').select('*').order('start_date', { ascending: false });
+    const listEl = document.getElementById('sa-elections-list');
+    listEl.innerHTML = `<p class="empty-note">Loading elections...</p>`;
+
+    const { data, error } = await supabase
+      .from('elections')
+      .select('*')
+      .order('start_date', { ascending: false });
     if (error) {
-      document.getElementById('sa-elections-list').innerHTML = `<div class="empty-note">Could not load: ${escapeHtml(error.message)}</div>`;
+      listEl.innerHTML = `<div class="empty-note">Could not load elections: ${escapeHtml(error.message)}</div>`;
       return;
     }
     elections = data || [];
 
-    const { data: allCandidates } = await supabase
+    // Avoid nested profiles(...) embed (ambiguous FK). Join client-side.
+    const { data: allCandidates, error: candErr } = await supabase
       .from('candidates')
-      .select('id, election_id, position, manifesto, approved, profiles(full_name, email)');
+      .select('id, election_id, user_id, position, manifesto, approved');
+    if (candErr) {
+      console.warn('Candidates load error:', candErr);
+    }
+
+    try {
+      await ensureProfileMap((allCandidates || []).map(c => c.user_id));
+    } catch (e) {
+      console.warn('Profile map for candidates failed:', e);
+    }
+
     candidatesByElection = {};
     (allCandidates || []).forEach(c => {
-      (candidatesByElection[c.election_id] ||= []).push(c);
+      (candidatesByElection[c.election_id] ||= []).push({
+        ...c,
+        full_name: profileName(c.user_id),
+        email: profileEmail(c.user_id),
+      });
     });
 
-    document.getElementById('sa-elections-list').innerHTML = elections.map(e => renderElectionCard(e)).join('') ||
-      `<p class="empty-note">No elections scheduled.</p>`;
+    if (!elections.length) {
+      listEl.innerHTML = `<p class="empty-note">No elections scheduled. Create one from the regular Admin Dashboard.</p>`;
+      return;
+    }
+
+    listEl.innerHTML = elections.map(e => renderElectionCard(e)).join('');
 
     document.querySelectorAll('form[data-add-candidate]').forEach(form => {
       form.addEventListener('submit', async (ev) => {
@@ -553,9 +839,16 @@
 
   function renderElectionCard(e) {
     const cands = candidatesByElection[e.id] || [];
+    const statusPillClass = e.status === 'closed' ? 'pill-rejected'
+      : e.status === 'active' ? 'pill-active'
+      : e.status === 'upcoming' ? 'pill-pending'
+      : 'pill-member';
     const candRows = cands.map(c => `
       <tr>
-        <td>${escapeHtml(c.profiles?.full_name || '—')}</td>
+        <td>
+          <strong>${escapeHtml(c.full_name)}</strong>
+          <div class="empty-note" style="font-size:0.75rem;">${escapeHtml(c.email)}</div>
+        </td>
         <td>${escapeHtml(c.position)}</td>
         <td><span class="pill ${c.approved ? 'pill-active' : 'pill-pending'}">${c.approved ? 'approved' : 'pending'}</span></td>
         <td>${actionSelectHtml('candidate', c.id, [
@@ -569,8 +862,14 @@
       <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
           <div>
-            <h3 style="margin:0 0 0.25rem;">${escapeHtml(e.title)}</h3>
-            <p style="color:var(--text-muted); font-size:0.85rem; margin:0;">${new Date(e.start_date).toLocaleString()} – ${new Date(e.end_date).toLocaleString()}</p>
+            <h3 style="margin:0 0 0.25rem;">
+              ${escapeHtml(e.title)}
+              <span class="pill ${statusPillClass}" style="margin-left:0.4rem; vertical-align:middle;">${escapeHtml(e.status)}</span>
+            </h3>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin:0;">
+              ${new Date(e.start_date).toLocaleString()} – ${new Date(e.end_date).toLocaleString()}
+            </p>
+            ${e.description ? `<p style="color:var(--text-muted); font-size:0.85rem; margin:0.35rem 0 0;">${escapeHtml(e.description)}</p>` : ''}
           </div>
           ${actionSelectHtml('election', e.id, [
             { value: 'draft', label: 'Set: Draft' },
@@ -581,7 +880,7 @@
           ], `Status: ${e.status}`)}
         </div>
 
-        <h4 style="margin:1rem 0 0.5rem;">Candidates</h4>
+        <h4 style="margin:1rem 0 0.5rem;">Candidates (${cands.length})</h4>
         <div style="overflow-x:auto;">
           <table>
             <thead><tr><th>Name</th><th>Position</th><th>Status</th><th>Actions</th></tr></thead>
@@ -605,8 +904,9 @@
     const position = formData.get('position').trim();
     const manifesto = formData.get('manifesto').trim() || null;
 
-    const { data: profile, error: lookupErr } = await supabase.from('profiles').select('id').eq('email', email).single();
+    const { data: profile, error: lookupErr } = await supabase.from('profiles').select('id, full_name, email').eq('email', email).maybeSingle();
     if (lookupErr || !profile) return flash(`No member found with email ${email}.`, 'error');
+    profileById[profile.id] = profile;
 
     const { error } = await supabase.from('candidates').insert({
       election_id: electionId, user_id: profile.id, position, manifesto,
@@ -663,24 +963,49 @@
   // APPROVALS & FINANCIALS — savings-group activation & withdrawals.
   // =====================================================================
   async function loadSavingsApprovals() {
+    // No nested profiles(...) — ambiguous FK (user_id + approved_by).
     const { data, error } = await supabase
       .from('savings_group_members')
-      .select('id, join_fee_paid_at, profiles(full_name, email), savings_groups(name, group_join_fee)')
-      .eq('status', 'pending').eq('join_fee_paid', true);
+      .select('id, user_id, group_id, join_fee_paid_at, status, join_fee_paid')
+      .eq('status', 'pending')
+      .eq('join_fee_paid', true)
+      .order('join_fee_paid_at', { ascending: false });
+
     if (error) {
       document.getElementById('sa-approvals-tbody').innerHTML = `<tr><td colspan="6" class="empty-note">Could not load: ${escapeHtml(error.message)}</td></tr>`;
       return;
     }
-    document.getElementById('sa-approvals-tbody').innerHTML = (data || []).map(r => `
+
+    const rows = data || [];
+    await ensureProfileMap(rows.map(r => r.user_id));
+
+    const groupIds = [...new Set(rows.map(r => r.group_id).filter(Boolean))];
+    const groupById = {};
+    if (groupIds.length) {
+      const { data: groups } = await supabase
+        .from('savings_groups')
+        .select('id, name, group_join_fee, currency')
+        .in('id', groupIds);
+      (groups || []).forEach(g => { groupById[g.id] = g; });
+    }
+
+    document.getElementById('sa-approvals-tbody').innerHTML = rows.map(r => {
+      const g = groupById[r.group_id];
+      const fee = g?.group_join_fee != null ? Number(g.group_join_fee).toLocaleString() : '—';
+      const currency = g?.currency || 'UGX';
+      return `
       <tr>
-        <td>${escapeHtml(r.profiles?.full_name)}</td>
-        <td>${escapeHtml(r.profiles?.email)}</td>
-        <td>${escapeHtml(r.savings_groups?.name)}</td>
-        <td>${Number(r.savings_groups?.group_join_fee).toLocaleString()}</td>
+        <td>${escapeHtml(profileName(r.user_id))}</td>
+        <td>${escapeHtml(profileEmail(r.user_id))}</td>
+        <td>${escapeHtml(g?.name || '—')}</td>
+        <td>${currency} ${fee}</td>
         <td>${r.join_fee_paid_at ? new Date(r.join_fee_paid_at).toLocaleDateString() : '—'}</td>
-        <td>${actionSelectHtml('savings-approval', r.id, [{ value: 'activate', label: 'Activate' }, { value: 'reject', label: 'Reject' }])}</td>
-      </tr>
-    `).join('') || `<tr><td colspan="6" class="empty-note">No pending activations.</td></tr>`;
+        <td>${actionSelectHtml('savings-approval', r.id, [
+          { value: 'activate', label: 'Activate' },
+          { value: 'reject', label: 'Reject' },
+        ])}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="6" class="empty-note">No pending activations.</td></tr>`;
   }
 
   async function handleSavingsApprovalAction(action, id) {
@@ -695,24 +1020,51 @@
   }
 
   async function loadWithdrawals() {
+    // No nested profiles(...) — ambiguous FK (user_id + approved_by).
     const { data, error } = await supabase
       .from('savings_transactions')
-      .select('id, amount, purpose, created_at, profiles(full_name, email), savings_groups(name)')
-      .eq('type', 'withdrawal').eq('status', 'pending');
+      .select('id, user_id, group_id, amount, purpose, created_at, status, type')
+      .eq('type', 'withdrawal')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
     if (error) {
       document.getElementById('sa-withdrawals-tbody').innerHTML = `<tr><td colspan="6" class="empty-note">Could not load: ${escapeHtml(error.message)}</td></tr>`;
       return;
     }
-    document.getElementById('sa-withdrawals-tbody').innerHTML = (data || []).map(r => `
+
+    const rows = data || [];
+    await ensureProfileMap(rows.map(r => r.user_id));
+
+    const groupIds = [...new Set(rows.map(r => r.group_id).filter(Boolean))];
+    const groupById = {};
+    if (groupIds.length) {
+      const { data: groups } = await supabase
+        .from('savings_groups')
+        .select('id, name, currency')
+        .in('id', groupIds);
+      (groups || []).forEach(g => { groupById[g.id] = g; });
+    }
+
+    document.getElementById('sa-withdrawals-tbody').innerHTML = rows.map(r => {
+      const g = groupById[r.group_id];
+      const currency = g?.currency || 'UGX';
+      return `
       <tr>
-        <td>${escapeHtml(r.profiles?.full_name)}</td>
-        <td>${escapeHtml(r.savings_groups?.name)}</td>
-        <td>${Number(r.amount).toLocaleString()}</td>
-        <td>${escapeHtml(r.purpose)}</td>
-        <td>${new Date(r.created_at).toLocaleDateString()}</td>
-        <td>${actionSelectHtml('withdrawal', r.id, [{ value: 'approve', label: 'Approve' }, { value: 'reject', label: 'Reject' }])}</td>
-      </tr>
-    `).join('') || `<tr><td colspan="6" class="empty-note">No withdrawal requests.</td></tr>`;
+        <td>
+          <strong>${escapeHtml(profileName(r.user_id))}</strong>
+          <div class="empty-note" style="font-size:0.75rem;">${escapeHtml(profileEmail(r.user_id))}</div>
+        </td>
+        <td>${escapeHtml(g?.name || '—')}</td>
+        <td>${currency} ${Number(r.amount ?? 0).toLocaleString()}</td>
+        <td>${escapeHtml(r.purpose || '—')}</td>
+        <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
+        <td>${actionSelectHtml('withdrawal', r.id, [
+          { value: 'approve', label: 'Approve' },
+          { value: 'reject', label: 'Reject' },
+        ])}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="6" class="empty-note">No withdrawal requests.</td></tr>`;
   }
 
   async function handleWithdrawalAction(action, id) {

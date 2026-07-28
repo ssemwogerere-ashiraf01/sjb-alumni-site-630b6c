@@ -1,6 +1,7 @@
 import { supabase } from './supabase-client.js';
 import { BASE_URL } from './site-config.js';
 import { showFeePaymentPrompt } from './fee-prompt.js';
+import { loadPending, clearPending, verifyWithServer } from './flutterwave.js';
 
 const IDLE_LIMIT_MS = 10 * 60 * 1000;   // 10 minutes idle -> logout
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes -> refresh session/data
@@ -60,6 +61,30 @@ export async function requireApprovedMember() {
     return null;
   }
   if (!profile.membership_fee_paid) {
+    // Returning from Flutterwave membership checkout: finish verification before prompting again.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('fee_paid') === '1' || params.get('status') === 'successful') {
+      const pending = loadPending();
+      if (pending?.kind === 'membership' && pending?.tx_ref) {
+        try {
+          const result = await verifyWithServer({
+            tx_ref: pending.tx_ref,
+            kind: 'membership',
+          });
+          if (result.success) {
+            clearPending();
+            const { data: refreshed } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .maybeSingle();
+            if (refreshed?.membership_fee_paid) return refreshed;
+          }
+        } catch (err) {
+          console.warn('Membership fee re-verify failed:', err);
+        }
+      }
+    }
     showFeePaymentPrompt();
     return null;
   }
