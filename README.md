@@ -362,6 +362,8 @@ The `sql/` directory contains ordered migration files:
 | `006_fix_recursive_policy.sql` | Policy correction for recursive lookups |
 | `007_onboarding.sql` | Onboarding workflow schema updates |
 | `008_public_leader_profiles.sql` | Public leader profile RPC function |
+| `013_super_admin.sql` | Adds the exclusive super-admin tier: role changes and permanent account deletion |
+| `014_super_admin_critical_actions.sql` | Restricts edit/delete on posts, savings groups, savings approvals, withdrawals, elections/candidates, and feedback forms to the super admin; regular admins keep create-only access |
 
 ---
 
@@ -396,9 +398,12 @@ Payments are handled entirely through **Flutterwave** with server-side verificat
 
 ## Admin Panel
 
-The admin panel (`/admin/index.html`) is accessible only to users with `role = 'admin'`.
+There are two admin surfaces, split by how consequential the action is:
 
-### Members Tab
+- **`/admin/index.html`** — accessible to any user with `role = 'admin'`. Handles day-to-day, non-critical work: member approvals, and *creating* new posts, savings groups, and elections.
+- **`/admin/super-admin.html`** — accessible only to the one account with `is_super_admin = true`. Handles every critical **edit/update** and **delete** across posts, savings groups, savings approvals, withdrawals (financials), elections/candidates, and feedback forms, plus role changes and permanent account deletion. Both the UI and the database RLS policies (see `sql/013_super_admin.sql` and `sql/014_super_admin_critical_actions.sql`) enforce this — a regular admin cannot bypass the UI to edit or delete these records directly.
+
+### Members Tab *(regular admin)*
 
 | Feature | Description |
 |---------|-------------|
@@ -408,36 +413,29 @@ The admin panel (`/admin/index.html`) is accessible only to users with `role = '
 | **Suspend/Kick** | Temporarily or permanently remove members |
 | **Reactivate** | Restore suspended/kicked/rejected members |
 | **Mark Fee Paid** | Manually mark membership fee as paid |
-| **Make/Remove Admin** | Grant or revoke admin privileges |
 | **Unlock** | Clear account lockout from failed login attempts |
 | **Detail view** | Expand rows to see phone, profession, location, graduation year, login attempts |
 
-### Savings Groups Tab
+Changing a member's role (member ⇄ leader ⇄ admin) and permanently deleting an account are Super Admin Dashboard actions — see below.
 
-| Feature | Description |
-|---------|-------------|
-| **Create Group** | Define name, description, monthly contribution, join fee, max members |
-| **Activate/Deactivate** | Toggle group visibility to members |
-| **Member counts** | See active member count vs max capacity |
+### Content Management, Savings Groups & Elections Tabs *(regular admin)*
 
-### Savings Approvals Tab
+Regular admins can **create** news, events, jobs, forum posts, savings announcements, savings groups, and elections (draft status). Publishing/hiding or deleting an existing post, editing or deactivating/deleting a savings group, and editing/closing an election or managing its candidates all require the Super Admin Dashboard — these tabs show existing records read-only with a note pointing there.
 
-Review and activate members who have paid their group join fee and are awaiting approval.
+### Feedback Forms
 
-### Withdrawals Tab
+Any admin can create a feedback form and add questions, and can view results. Deactivating a form, deleting a form, and removing a question are Super Admin actions (the buttons only appear when signed in as the super admin).
 
-Approve or reject member withdrawal requests. Only approve after funds have been physically disbursed.
+### Super Admin Dashboard (`/admin/super-admin.html`)
 
-### Elections Tab
-
-| Feature | Description |
-|---------|-------------|
-| **Create Election** | Set title, description, start/end dates |
-| **Edit Dates** | Change election window timeframe |
-| **Add Candidates** | Add members by email, specify position and manifesto |
-| **Approve/Unapprove** | Control candidate visibility |
-| **Change Status** | Draft → Upcoming → Active → Closed |
-| **Auto-promote Winners** | Closing an election automatically runs `promote_election_winners()` to publish winners to the Leadership page |
+| Tab | Feature |
+|-----|---------|
+| **Members** | Change any member's role (member ⇄ leader ⇄ admin); permanently delete an account |
+| **Content** | Publish/hide or delete news, events, jobs, forum topics/replies, savings announcements |
+| **Savings Groups** | Edit contribution/join-fee amounts and max members; activate/deactivate; delete a group |
+| **Elections** | Add/approve/unapprove/remove candidates; change election status (Draft → Upcoming → Active → Closed); closing an election auto-promotes winners via `promote_election_winners()`; delete an election |
+| **Approvals & Financials** | Activate or reject pending savings-group registrations; approve or reject withdrawal requests |
+| **Feedback Forms** | Summary stats, with a link through to the full feedback builder where destructive actions unlock for the super admin |
 
 ---
 

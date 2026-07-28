@@ -23,3 +23,10 @@
 ## Create send-newsletter Edge Function
 - [x] Created `supabase/functions/send-newsletter/index.ts` with SendGrid integration
 
+
+## Super Admin scope expansion — posts, savings, elections, approvals, financials, feedback
+- [x] sql/014_super_admin_critical_actions.sql: RLS now restricts update/delete on news, events, jobs, forum topics/replies, savings announcements, savings groups, savings_group_members (approvals), savings_transactions (financials), elections, candidates, and feedback_forms/questions to is_super_admin(); admins keep insert-only (create)
+- [x] promote_election_winners() now requires is_super_admin() (closing an election)
+- [x] admin/index.html: Content Management, Savings Groups, Elections tabs are create + read-only for regular admins; removed the Approvals & Financials tab (linked to Super Admin Dashboard instead); wired up previously-dead Create Group / Create Election buttons
+- [x] admin/feedback.html: Deactivate/Delete-form and Remove-question buttons now gated to is_super_admin
+- [x] admin/super-admin.html: added Content, Savings Groups, Elections, Approvals & Financials, and Feedback Forms tabs alongside the existing Members tab, with full edit/delete/approve logic

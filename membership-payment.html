@@ -50,11 +50,13 @@
 
   // Show the correct fee for this member's tier (alumni: 3,000 UGX, non-alumni: 15,000 UGX)
   const feeKey = profile?.membership_class === 'alumni' ? 'membership_fee_alumni' : 'membership_fee_non_alumni';
-  const { data: settings } = await supabase.from('app_settings').select('value').eq('key', feeKey).single();
+  const { data: settings } = await supabase.from('app_settings').select('value').eq('key', feeKey).maybeSingle();
   const feeAmount = settings?.value?.amount ?? (profile?.membership_class === 'alumni' ? 3000 : 15000);
   const tierLabel = profile?.membership_class === 'alumni' ? 'alumni' : 'non-alumni';
   document.getElementById('fee-subtitle').textContent =
-    `As a ${tierLabel} member, a one-time membership fee of UGX ${feeAmount.toLocaleString()} unlocks your account.`;
+    tierLabel === 'alumni'
+      ? `As an alumni member, a one-time fee of UGX ${feeAmount.toLocaleString()} confirms your place in the association and unlocks savings groups and full member tools.`
+      : `As a non-alumni member, a one-time fee of UGX ${feeAmount.toLocaleString()} is required before you can join savings groups or use paid member features. Your application was already approved by an admin — this step is only the fee.`;
   document.getElementById('ugx-option').textContent = `Ugandan Shillings (UGX ${feeAmount.toLocaleString()})`;
 
   document.getElementById('pay-btn').addEventListener('click', async () => {

@@ -25,7 +25,7 @@
           <span id="avatar-fallback" style="width:64px;height:64px;border-radius:50%;background:var(--gold);color:var(--ink-navy);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:'Fraunces',serif;"></span>
           <input type="file" id="avatar_file" accept="image/png,image/jpeg,image/webp" style="flex:1;" />
         </div>
-        <small style="color:var(--text-muted);">Optional — JPG, PNG or WEBP, up to 2MB. You can also add this later from My Profile.</small>
+        <small style="color:var(--text-muted);">Optional — JPG, PNG or WEBP, up to 10MB. You can also add this later from My Profile.</small>
       </div>
 
       <div class="form-group">
@@ -94,8 +94,8 @@
     if (!file) return;
     const alertBox = document.getElementById('alert-box');
 
-    if (file.size > 2 * 1024 * 1024) {
-      alertBox.innerHTML = `<div class="alert alert-error">That image is larger than 2MB — please choose a smaller file.</div>`;
+    if (file.size > 10 * 1024 * 1024) {
+      alertBox.innerHTML = `<div class="alert alert-error">That image is larger than 10MB — please choose a smaller file.</div>`;
       e.target.value = '';
       return;
     }

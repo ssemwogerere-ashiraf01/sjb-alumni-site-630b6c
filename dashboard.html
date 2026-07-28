@@ -113,7 +113,7 @@
   mountFooter();
 
   const profile = await requireApprovedMember();
-  if (!profile) throw new Error('redirecting');
+  if (!profile) { /* overlay/redirect */ } else {
 
   document.getElementById('welcome-name').textContent = `Welcome back, ${profile.full_name?.split(' ')[0] || 'member'}`;
   const badge = document.getElementById('class-badge');
@@ -173,6 +173,7 @@
   document.getElementById('forum-list').innerHTML = (topics && topics.length)
     ? topics.map(topic => `<div class="list-item"><strong>${escapeHtml(topic.title)}</strong><div class="meta">${escapeHtml(topic.category || 'General')} · ${new Date(topic.created_at).toLocaleDateString()}</div></div>`).join('')
     : `<p style="color:var(--text-muted);font-size:0.9rem;">No active forum topics yet.</p>`;
+  } // end else (profile loaded)
 
   function escapeHtml(str) {
     const div = document.createElement('div');

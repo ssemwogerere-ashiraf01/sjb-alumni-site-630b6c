@@ -145,7 +145,7 @@
     // is_active is deliberately omitted — the database defaults new member
     // submissions to false (pending), and RLS blocks a non-admin from
     // setting it to true directly even if they tried to.
-    const { error } = await supabase.from('jobs').insert({
+    const { data, error } = await supabase.from('jobs').insert({
       title,
       company: company || null,
       location: location || null,
@@ -153,12 +153,24 @@
       description,
       expires_at: expiresAt,
       posted_by: profile.id,
-    });
+    }).select().single();
 
     if (error) {
       postAlert.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
     } else {
       postAlert.innerHTML = `<div class="alert alert-success">Submitted! Your listing will appear once an admin approves it — you'll see it below marked "Pending Review" in the meantime.</div>`;
+      if (data) {
+        try {
+          const { error: notifyError } = await supabase.functions.invoke('send-newsletter', {
+            body: { table: 'jobs', record: data },
+          });
+          if (notifyError) {
+            console.warn('Job newsletter resend failed:', notifyError);
+          }
+        } catch (notifyError) {
+          console.warn('Job newsletter resend failed:', notifyError);
+        }
+      }
       postForm.reset();
       await loadJobs();
     }

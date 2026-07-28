@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Feedback — SJB Association</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+<style>
+  .page-header {
+    background: var(--paper);
+    border-bottom: 1px solid var(--border);
+    padding: 2.5rem 2rem;
+    text-align: center;
+  }
+  .page-header h1 { margin: 0 0 0.25rem; font-size: 1.8rem; }
+  .page-header p { color: var(--text-muted); margin: 0; }
+
+  .forms-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1.5rem; margin-top:1.5rem; }
+  .form-card { display:flex; flex-direction:column; }
+  .form-card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
+  .form-card p { flex:1; }
+  .form-card-footer { margin-top: 1rem; display:flex; justify-content:space-between; align-items:center; }
+  .badge-done { font-size: 0.78rem; color: var(--forest); font-weight: 600; }
+  .forms-empty { text-align:center; color:var(--text-muted); padding:3rem 0; }
+  .previous-forms-heading {
+    grid-column: 1 / -1; margin: 1.5rem 0 -0.25rem; font-size: 0.85rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted);
+    border-top: 1px solid var(--border); padding-top: 1.25rem;
+  }
+  .form-card-closed { opacity: 0.7; }
+  .badge-closed { font-size: 0.78rem; color: var(--text-muted); font-style: italic; }
+
+
+  /* --- Fill-out view --- */
+  .fill-wrap { max-width: 640px; margin: 0 auto; }
+  .question-block { margin-bottom: 2rem; }
+  .question-text { font-weight: 600; margin-bottom: 0.15rem; }
+  .question-required { color: #9c2b2b; margin-left: 0.15rem; }
+  .question-help { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; }
+
+  /* Rating (1-5) as tappable buttons, not a text field */
+  .rating-row { display:flex; gap: 0.5rem; }
+  .rating-btn {
+    flex:1; padding: 0.7rem 0.5rem; text-align:center; border-radius: var(--radius);
+    border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600;
+    color: var(--ink-navy); transition: all 0.12s ease;
+  }
+  .rating-btn:hover { border-color: var(--gold); }
+  .rating-btn.selected { background: var(--forest); border-color: var(--forest); color: #fff; }
+  .rating-scale-labels { display:flex; justify-content:space-between; font-size:0.72rem; color:var(--text-muted); margin-top:0.35rem; }
+
+  /* Single / multiple choice as option cards, not a plain <select> —
+     easier to tap through on mobile than a dropdown or radio list. */
+  .choice-list { display:flex; flex-direction:column; gap: 0.5rem; }
+  .choice-option {
+    display:flex; align-items:center; gap:0.6rem; padding: 0.65rem 0.9rem;
+    border: 1px solid var(--border); border-radius: var(--radius); cursor:pointer;
+    font-size: 0.92rem; background:#fff; transition: all 0.12s ease;
+  }
+  .choice-option:hover { border-color: var(--gold); }
+  .choice-option.selected { border-color: var(--forest); background: #eaf4ec; font-weight: 600; }
+  .choice-option input { accent-color: var(--forest); }
+
+  .short-text-wrap textarea {
+    width:100%; padding:0.65rem 0.8rem; border:1px solid var(--border); border-radius:var(--radius);
+    font-family: inherit; font-size: 0.92rem; resize: vertical; min-height: 80px;
+  }
+  .char-counter { font-size: 0.75rem; color: var(--text-muted); text-align:right; margin-top:0.2rem; }
+  .char-counter.near-limit { color: #9c2b2b; }
+
+  .fill-actions { display:flex; gap:0.75rem; margin-top: 1rem; }
+  .back-link { display:inline-block; margin-bottom: 1rem; font-size: 0.88rem; }
+  .submitted-notice { text-align:center; padding: 3rem 1rem; }
+  .submitted-notice .big-check { font-size: 2.5rem; margin-bottom: 0.5rem; }
+
+  /* --- Identity step (shown before the actual questions) --- */
+  .identity-step input[type="email"],
+  .identity-step input[type="text"] {
+    width: 100%; padding: 0.65rem 0.8rem; border: 1px solid var(--border);
+    border-radius: var(--radius); font-family: inherit; font-size: 0.92rem;
+  }
+  .identity-note {
+    font-size: 0.82rem; color: var(--text-muted); background: #f8fafc;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 0.75rem 0.9rem; margin-bottom: 1.5rem;
+  }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<div class="page-header">
+  <span class="eyebrow">Association</span>
+  <h1>Feedback</h1>
+  <p>Help us improve the site. Quick surveys — mostly tap-to-answer, a couple of minutes each.</p>
+</div>
+
+<div class="section" style="padding-top:1.5rem;">
+  <div id="alert-box"></div>
+
+  <!-- List view -->
+  <div id="list-view">
+    <div id="forms-container" class="forms-grid">
+      <div class="forms-empty">Loading forms...</div>
+    </div>
+  </div>
+
+  <!-- Fill-out view -->
+  <div id="fill-view" class="fill-wrap" hidden>
+    <a href="#" id="back-to-list" class="back-link">&larr; Back to all forms</a>
+    <div class="page-header" style="text-align:left; padding: 1.5rem;">
+      <h1 id="fill-title" style="font-size:1.4rem;"></h1>
+      <p id="fill-desc"></p>
+    </div>
+    <div id="fill-alert"></div>
+
+    <div id="identity-step" class="identity-step" hidden>
+      <div class="identity-note">Before you continue, please confirm the email and username we should attribute this response to. Admins use this to see who submitted each reply.</div>
+      <div class="question-block">
+        <div class="question-text">Email address<span class="question-required">*</span></div>
+        <input type="email" id="identity-email" placeholder="you@example.com" />
+      </div>
+      <div class="question-block">
+        <div class="question-text">Username<span class="question-required">*</span></div>
+        <input type="text" id="identity-username" placeholder="How should we identify you?" />
+      </div>
+      <div class="fill-actions">
+        <button type="button" class="btn btn-gold" id="identity-continue-btn">Continue</button>
+      </div>
+    </div>
+
+    <form id="fill-form" hidden></form>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+
+<script type="module">
+  import { supabase } from './assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+  import { requireLoggedIn } from './assets/js/session-guard.js';
+
+  mountNav('feedback');
+  mountFooter();
+
+  const session = await requireLoggedIn();
+  if (!session) throw new Error('redirecting');
+  const userId = session.user.id;
+
+  const { data: myProfile } = await supabase
+    .from('profiles')
+    .select('email, full_name')
+    .eq('id', userId)
+    .single();
+
+  const listView = document.getElementById('list-view');
+  const fillView = document.getElementById('fill-view');
+  const formsContainer = document.getElementById('forms-container');
+  const alertBox = document.getElementById('alert-box');
+  const identityStep = document.getElementById('identity-step');
+  const fillForm = document.getElementById('fill-form');
+  const identityEmailInput = document.getElementById('identity-email');
+  const identityUsernameInput = document.getElementById('identity-username');
+
+  let forms = [];
+  let completedFormIds = new Set();
+  let pendingForm = null;
+  let pendingQuestions = null;
+  let confirmedIdentity = null;
+
+  await loadForms();
+
+  document.getElementById('identity-continue-btn').addEventListener('click', () => {
+    const email = identityEmailInput.value.trim();
+    const username = identityUsernameInput.value.trim();
+    const fillAlert = document.getElementById('fill-alert');
+    fillAlert.innerHTML = '';
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      fillAlert.innerHTML = `<div class="alert alert-error">Please enter a valid email address.</div>`;
+      return;
+    }
+    if (!username) {
+      fillAlert.innerHTML = `<div class="alert alert-error">Please enter a username.</div>`;
+      return;
+    }
+
+    confirmedIdentity = { email, username };
+    identityStep.hidden = true;
+    fillForm.hidden = false;
+    renderFillForm(pendingForm, pendingQuestions);
+  });
+
+  document.getElementById('back-to-list').addEventListener('click', (e) => {
+    e.preventDefault();
+    showList();
+  });
+
+  async function loadForms() {
+    const { data: formsData, error: formsErr } = await supabase
+      .from('feedback_forms')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (formsErr) {
+      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(formsErr.message)}</div>`;
+      formsContainer.innerHTML = `<div class="forms-empty">Could not load forms.</div>`;
+      return;
+    }
+
+    forms = formsData || [];
+
+    const { data: myResponses } = await supabase
+      .from('feedback_responses')
+      .select('form_id')
+      .eq('user_id', userId);
+
+    completedFormIds = new Set((myResponses || []).map(r => r.form_id));
+    renderForms();
+  }
+
+  function renderForms() {
+    if (!forms.length) {
+      formsContainer.innerHTML = `<div class="forms-empty">No feedback forms yet. Check back later!</div>`;
+      return;
+    }
+
+    const activeForms = forms.filter(f => f.is_active);
+    const previousForms = forms.filter(f => !f.is_active);
+
+    formsContainer.innerHTML =
+      (activeForms.length ? activeForms.map(f => formCardHtml(f)).join('') : `<div class="forms-empty">No feedback forms are open right now. Check back later!</div>`) +
+      (previousForms.length ? `
+        <div class="previous-forms-heading">Previous Forms</div>
+        ${previousForms.map(f => formCardHtml(f)).join('')}
+      ` : '');
+
+    formsContainer.querySelectorAll('button[data-form-id]:not([disabled])').forEach(btn => {
+      btn.addEventListener('click', () => openForm(btn.dataset.formId));
+    });
+  }
+
+  function formCardHtml(f) {
+    const done = completedFormIds.has(f.id);
+    const closed = !f.is_active;
+
+    let footerNote;
+    let buttonLabel;
+    let buttonEnabled;
+
+    if (closed) {
+      footerNote = done
+        ? '<span class="badge-done">✓ Submitted — thank you!</span>'
+        : '<span class="badge-closed">This form is now closed.</span>';
+      buttonLabel = 'Closed';
+      buttonEnabled = false;
+    } else if (done) {
+      footerNote = '<span class="badge-done">✓ Submitted — thank you!</span>';
+      buttonLabel = 'Already submitted';
+      buttonEnabled = false;
+    } else {
+      footerNote = '<span></span>';
+      buttonLabel = 'Start';
+      buttonEnabled = true;
+    }
+
+    return `
+      <div class="card form-card ${closed ? 'form-card-closed' : ''}">
+        <div>
+          <h3>${escapeHtml(f.title)}</h3>
+          <p>${escapeHtml(f.description || '')}</p>
+        </div>
+        <div class="form-card-footer">
+          ${footerNote}
+          <button type="button" class="btn ${buttonEnabled ? 'btn-gold' : 'btn-outline-light'}" style="${buttonEnabled ? '' : 'background:var(--ink-navy);color:#fff;'}" data-form-id="${f.id}" ${buttonEnabled ? '' : 'disabled'}>
+            ${buttonLabel}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function openForm(formId) {
+    alertBox.innerHTML = '';
+    const form = forms.find(f => f.id === formId);
+    if (!form) return;
+    if (!form.is_active) {
+      alertBox.innerHTML = `<div class="alert alert-error">This form is closed and no longer accepting responses.</div>`;
+      return;
+    }
+
+    const { data: questions, error } = await supabase
+      .from('feedback_questions')
+      .select('*')
+      .eq('form_id', formId)
+      .order('sort_order', { ascending: true });
+
+    if (error) {
+      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+      return;
+    }
+
+    pendingForm = form;
+    pendingQuestions = questions || [];
+    confirmedIdentity = null;
+
+    document.getElementById('fill-alert').innerHTML = '';
+    identityEmailInput.value = myProfile?.email || session.user.email || '';
+    identityUsernameInput.value = myProfile?.full_name || '';
+    identityStep.hidden = false;
+    fillForm.hidden = true;
+    fillForm.innerHTML = '';
+
+    document.getElementById('fill-title').textContent = form.title;
+    document.getElementById('fill-desc').textContent = form.description || '';
+    showFill();
+  }
+
+  function renderFillForm(form, questions) {
+    document.getElementById('fill-title').textContent = form.title;
+    document.getElementById('fill-desc').textContent = form.description || '';
+    const fillAlert = document.getElementById('fill-alert');
+    fillAlert.innerHTML = '';
+
+    const fillForm = document.getElementById('fill-form');
+    fillForm.innerHTML = questions.map(q => renderQuestionBlock(q)).join('') + `
+      <div class="fill-actions">
+        <button type="submit" class="btn btn-gold" id="fill-submit-btn">Submit Feedback</button>
+      </div>
+    `;
+
+    // Wire up interactive selection states
+    fillForm.querySelectorAll('.rating-row').forEach(row => {
+      row.querySelectorAll('.rating-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          row.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          row.dataset.value = btn.dataset.value;
+        });
+      });
+    });
+
+    fillForm.querySelectorAll('.choice-list[data-mode="single"]').forEach(list => {
+      list.querySelectorAll('.choice-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+          list.querySelectorAll('.choice-option').forEach(o => { o.classList.remove('selected'); o.querySelector('input').checked = false; });
+          opt.classList.add('selected');
+          opt.querySelector('input').checked = true;
+        });
+      });
+    });
+
+    fillForm.querySelectorAll('.choice-list[data-mode="multi"]').forEach(list => {
+      list.querySelectorAll('.choice-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+          const input = opt.querySelector('input');
+          input.checked = !input.checked;
+          opt.classList.toggle('selected', input.checked);
+        });
+      });
+    });
+
+    fillForm.querySelectorAll('textarea[data-maxlength]').forEach(ta => {
+      const max = parseInt(ta.dataset.maxlength, 10);
+      const counter = ta.parentElement.querySelector('.char-counter');
+      const updateCounter = () => {
+        const remaining = max - ta.value.length;
+        counter.textContent = `${ta.value.length} / ${max}`;
+        counter.classList.toggle('near-limit', remaining < 20);
+      };
+      ta.addEventListener('input', () => {
+        if (ta.value.length > max) ta.value = ta.value.slice(0, max);
+        updateCounter();
+      });
+      updateCounter();
+    });
+
+    fillForm.addEventListener('submit', (e) => handleSubmit(e, form, questions));
+  }
+
+  function renderQuestionBlock(q) {
+    const required = q.is_required ? '<span class="question-required">*</span>' : '';
+    let inner = '';
+
+    if (q.question_type === 'rating_5') {
+      inner = `
+        <div class="rating-row" data-question-id="${q.id}" data-type="rating_5">
+          ${[1,2,3,4,5].map(n => `<button type="button" class="rating-btn" data-value="${n}">${n}</button>`).join('')}
+        </div>
+        <div class="rating-scale-labels"><span>Poor</span><span>Excellent</span></div>
+      `;
+    } else if (q.question_type === 'single_choice' || q.question_type === 'multiple_choice') {
+      const mode = q.question_type === 'single_choice' ? 'single' : 'multi';
+      const inputType = q.question_type === 'single_choice' ? 'radio' : 'checkbox';
+      const options = Array.isArray(q.options) ? q.options : [];
+      inner = `
+        <div class="choice-list" data-question-id="${q.id}" data-type="${q.question_type}" data-mode="${mode}">
+          ${options.map((opt, i) => `
+            <label class="choice-option">
+              <input type="${inputType}" name="q_${q.id}" value="${escapeHtml(opt)}" style="display:none;" />
+              ${escapeHtml(opt)}
+            </label>
+          `).join('')}
+        </div>
+      `;
+    } else if (q.question_type === 'short_text') {
+      inner = `
+        <div class="short-text-wrap" data-question-id="${q.id}" data-type="short_text">
+          <textarea maxlength="${q.max_length}" data-maxlength="${q.max_length}" placeholder="Optional — keep it brief"></textarea>
+          <div class="char-counter"></div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="question-block">
+        <div class="question-text">${escapeHtml(q.question_text)}${required}</div>
+        ${inner}
+      </div>
+    `;
+  }
+
+  async function handleSubmit(e, form, questions) {
+    e.preventDefault();
+    const fillAlert = document.getElementById('fill-alert');
+    const submitBtn = document.getElementById('fill-submit-btn');
+    fillAlert.innerHTML = '';
+
+    // Gather + validate answers
+    const answers = [];
+    for (const q of questions) {
+      if (q.question_type === 'rating_5') {
+        const row = document.querySelector(`.rating-row[data-question-id="${q.id}"]`);
+        const value = row?.dataset.value;
+        if (!value && q.is_required) return fail(`Please answer: "${q.question_text}"`);
+        if (value) answers.push({ question_id: q.id, answer_rating: parseInt(value, 10) });
+
+      } else if (q.question_type === 'single_choice') {
+        const list = document.querySelector(`.choice-list[data-question-id="${q.id}"]`);
+        const checked = list.querySelector('input:checked');
+        if (!checked && q.is_required) return fail(`Please answer: "${q.question_text}"`);
+        if (checked) answers.push({ question_id: q.id, answer_choice: checked.value });
+
+      } else if (q.question_type === 'multiple_choice') {
+        const list = document.querySelector(`.choice-list[data-question-id="${q.id}"]`);
+        const checked = Array.from(list.querySelectorAll('input:checked')).map(i => i.value);
+        if (!checked.length && q.is_required) return fail(`Please answer: "${q.question_text}"`);
+        if (checked.length) answers.push({ question_id: q.id, answer_choices: checked });
+
+      } else if (q.question_type === 'short_text') {
+        const wrap = document.querySelector(`.short-text-wrap[data-question-id="${q.id}"]`);
+        const text = wrap.querySelector('textarea').value.trim();
+        if (!text && q.is_required) return fail(`Please answer: "${q.question_text}"`);
+        if (text) answers.push({ question_id: q.id, answer_text: text });
+      }
+    }
+
+    function fail(msg) {
+      fillAlert.innerHTML = `<div class="alert alert-error">${escapeHtml(msg)}</div>`;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+
+    // 1. Create the response row
+    const { data: response, error: responseErr } = await supabase
+      .from('feedback_responses')
+      .insert({
+        form_id: form.id,
+        user_id: userId,
+        submitted_email: confirmedIdentity?.email || null,
+        submitted_username: confirmedIdentity?.username || null,
+      })
+      .select()
+      .single();
+
+    if (responseErr) {
+      if (responseErr.code === '23505') {
+        fillAlert.innerHTML = `<div class="alert alert-success">You've already submitted this form — thank you!</div>`;
+      } else {
+        fillAlert.innerHTML = `<div class="alert alert-error">${escapeHtml(responseErr.message)}</div>`;
+      }
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Feedback';
+      return;
+    }
+
+    // 2. Insert the answers tied to that response
+    if (answers.length) {
+      const rows = answers.map(a => ({ response_id: response.id, ...a }));
+      const { error: answersErr } = await supabase.from('feedback_answers').insert(rows);
+      if (answersErr) {
+        fillAlert.innerHTML = `<div class="alert alert-error">${escapeHtml(answersErr.message)}</div>`;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Feedback';
+        return;
+      }
+    }
+
+    completedFormIds.add(form.id);
+    document.getElementById('fill-form').innerHTML = `
+      <div class="submitted-notice">
+        <div class="big-check">✓</div>
+        <h3>Thanks for your feedback!</h3>
+        <p style="color:var(--text-muted);">Your answers help us improve the site for everyone.</p>
+      </div>
+    `;
+  }
+
+  function showList() { fillView.hidden = true; listView.hidden = false; renderForms(); }
+  function showFill() { listView.hidden = true; fillView.hidden = false; window.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>
