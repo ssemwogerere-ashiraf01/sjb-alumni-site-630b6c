@@ -49,58 +49,75 @@ Deno.serve(async (req) => {
     const flwData = await flwRes.json();
     const txn = flwData?.data;
 
+    // Ownership is enforced by updating only this JWT user's rows for tx_ref.
+    // Flutterwave customer.email is not required to match (test mode often differs).
     const isVerified =
       flwRes.ok &&
       txn?.status === 'successful' &&
-      txn?.tx_ref === tx_ref &&
-      txn?.customer?.email?.toLowerCase() === user.email?.toLowerCase();
+      txn?.tx_ref === tx_ref;
 
     if (!isVerified) {
       await admin.from('audit_log').insert({
         actor_id: user.id, action: 'payment_verification_failed',
         details: { tx_ref, flw_status: txn?.status ?? 'unknown', flw_http_status: flwRes.status, flw_message: flwData?.message },
       });
-      // Surface WHY it failed (no secrets involved) so this is diagnosable
-      // from the browser instead of guessing blind next time.
       let reason = 'Unknown error.';
       if (!FLW_SECRET_KEY) reason = 'Server is missing its Flutterwave secret key configuration.';
       else if (flwRes.status === 401) reason = 'Flutterwave rejected the secret key (401 Unauthorized) — check it matches Test/Live mode correctly.';
       else if (!flwRes.ok) reason = `Flutterwave API returned HTTP ${flwRes.status}: ${flwData?.message ?? 'no message'}.`;
       else if (!txn) reason = 'No transaction found for this reference yet — it may still be processing.';
       else if (txn.status !== 'successful') reason = `Transaction status is "${txn.status}", not "successful".`;
-      else if (txn.customer?.email?.toLowerCase() !== user.email?.toLowerCase()) reason = 'Transaction email does not match your account email.';
+      else if (txn.tx_ref !== tx_ref) reason = 'Transaction reference mismatch.';
 
       return json({ error: `Payment could not be verified. (${reason})` }, 402, cors);
     }
 
     if (kind === 'membership') {
-      // Confirm the amount roughly matches the member's fee tier before trusting it.
-      const { data: profileRow } = await admin.from('profiles').select('membership_class').eq('id', user.id).single();
+      const { data: profileRow } = await admin.from('profiles').select('membership_class, membership_fee_paid').eq('id', user.id).maybeSingle();
       const feeKey = profileRow?.membership_class === 'alumni' ? 'membership_fee_alumni' : 'membership_fee_non_alumni';
-      const { data: settings } = await admin.from('app_settings').select('value').eq('key', feeKey).single();
-      const expected = settings?.value?.amount ?? (profileRow?.membership_class === 'alumni' ? 3000 : 15000);
-      if (txn.currency === 'UGX' && Number(txn.amount) < expected * 0.98) {
-        return json({ error: 'Amount paid does not match your membership fee tier.' }, 402, cors);
+      const { data: settings } = await admin.from('app_settings').select('value').eq('key', feeKey).maybeSingle();
+      const expected = Number(settings?.value?.amount ?? (profileRow?.membership_class === 'alumni' ? 3000 : 15000));
+      // Only enforce amount for UGX; USD conversions vary. Allow small underpay tolerance.
+      if (txn.currency === 'UGX' && expected > 0 && Number(txn.amount) < expected * 0.95) {
+        return json({ error: `Amount paid (UGX ${txn.amount}) is below the expected membership fee (UGX ${expected}).` }, 402, cors);
       }
 
       await admin.from('payments').update({
         status: 'completed',
-        flw_transaction_id: String(txn.id),
+        flw_transaction_id: String(txn.id ?? ''),
         raw_response: txn,
         verified_at: new Date().toISOString(),
       }).eq('tx_ref', tx_ref).eq('user_id', user.id);
 
-      await admin.from('profiles').update({
-        membership_fee_paid: true,
-        membership_fee_paid_at: new Date().toISOString(),
-      }).eq('id', user.id);
+      // Prefer RPC (bypasses sensitive-field trigger for service_role). Fall back to direct update.
+      let profileErr: { message: string } | null = null;
+      const { error: rpcErr } = await admin.rpc('mark_membership_fee_paid', {
+        p_user_id: user.id,
+        p_tx_ref: tx_ref,
+      });
+      if (rpcErr) {
+        const { data: paidProfile, error: updErr } = await admin.from('profiles').update({
+          membership_fee_paid: true,
+          membership_fee_paid_at: new Date().toISOString(),
+        }).eq('id', user.id).select('id, membership_fee_paid').maybeSingle();
+        profileErr = updErr;
+        if (!updErr && !paidProfile?.membership_fee_paid) {
+          profileErr = { message: 'Profile fee flag did not update.' };
+        }
+      }
+
+      if (profileErr) {
+        return json({
+          error: `Payment verified with Flutterwave, but could not mark fee paid on your profile: ${profileErr.message}. Run sql/018_service_role_profile_updates.sql and sql/019_mark_membership_fee_paid.sql in Supabase.`,
+        }, 500, cors);
+      }
 
       await admin.from('audit_log').insert({
         actor_id: user.id, action: 'membership_fee_paid', target_table: 'profiles', target_id: user.id,
         details: { tx_ref, amount: txn.amount, currency: txn.currency },
       });
 
-      return json({ success: true }, 200, cors);
+      return json({ success: true, note: 'Membership fee confirmed. Your account is marked paid.' }, 200, cors);
     }
 
     if (kind === 'savings_join_fee') {
