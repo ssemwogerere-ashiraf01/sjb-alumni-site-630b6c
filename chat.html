@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Member Chat — SJB Association</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+<style>
+  .chat-wrap { max-width: 1100px; margin: 0 auto; padding: 1rem; display: grid; grid-template-columns: 300px 1fr; gap: 1rem; min-height: 72vh; }
+  @media (max-width: 800px) { .chat-wrap { grid-template-columns: 1fr; } }
+  .chat-side, .chat-main {
+    background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; max-height: 75vh;
+  }
+  .chat-side h3, .chat-main-head { margin: 0; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); font-size: 1rem; display:flex; align-items:center; gap:0.5rem; justify-content:space-between; }
+  .member-list { overflow-y: auto; flex: 1; }
+  .member-item {
+    display: flex; align-items: center; gap: 0.65rem; width: 100%; text-align: left; padding: 0.6rem 0.85rem;
+    border: none; background: none; cursor: pointer; font-family: inherit; color: var(--text);
+    border-bottom: 1px solid var(--border);
+  }
+  .member-item:hover, .member-item.active { background: var(--parchment); }
+  .member-item .meta { font-size: 0.72rem; color: var(--text-muted); }
+  .member-item .info { min-width: 0; flex: 1; }
+  .member-item .info strong { display: block; font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .unread-badge {
+    background: #25d366; color: #fff; font-size: 0.72rem; font-weight: 700;
+    min-width: 1.25rem; height: 1.25rem; border-radius: 999px; display: inline-flex;
+    align-items: center; justify-content: center; padding: 0 0.35rem;
+  }
+  .member-avatar {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+    background: var(--gold); color: #16233a; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.85rem;
+  }
+  .member-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .messages { flex: 1; overflow-y: auto; padding: 1rem; background: var(--parchment); }
+  .bubble-wrap { margin: 0.45rem 0; max-width: 78%; }
+  .bubble-wrap.mine { margin-left: auto; }
+  .bubble-sender { font-size: 0.72rem; font-weight: 700; color: var(--forest); margin: 0 0 0.15rem 0.25rem; }
+  .bubble { padding: 0.5rem 0.7rem; border-radius: 12px; font-size: 0.9rem; background: var(--paper); border: 1px solid var(--border); position: relative; }
+  .bubble-wrap.mine .bubble { background: var(--forest); color: #fff; border-color: transparent; }
+  .bubble .when { display: block; font-size: 0.68rem; opacity: 0.75; margin-top: 0.2rem; }
+  .bubble .reply-quote { font-size: 0.78rem; opacity: 0.9; border-left: 3px solid var(--gold); padding: 0.25rem 0.45rem; margin-bottom: 0.35rem; background: rgba(0,0,0,0.06); border-radius: 4px; }
+  .bubble-wrap.mine .reply-quote { background: rgba(255,255,255,0.12); }
+  .reactions { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.25rem; }
+  .reaction-chip { font-size: 0.75rem; background: var(--paper); border: 1px solid var(--border); border-radius: 999px; padding: 0.1rem 0.4rem; cursor: pointer; }
+  .bubble-actions { display: none; gap: 0.35rem; margin-top: 0.25rem; }
+  .bubble-wrap:hover .bubble-actions { display: flex; }
+  .bubble-actions button { font-size: 0.7rem; border: none; background: transparent; color: var(--text-muted); cursor: pointer; }
+  .composer { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.65rem; border-top: 1px solid var(--border); align-items: center; }
+  .composer input[type="text"] { flex: 1; min-width: 120px; padding: 0.5rem 0.65rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--paper); color: var(--text); }
+  .composer .icon-btn { border: 1px solid var(--border); background: var(--paper); border-radius: 8px; padding: 0.4rem 0.55rem; cursor: pointer; color: var(--text); }
+  .reply-bar { width: 100%; font-size: 0.8rem; background: var(--parchment); padding: 0.35rem 0.5rem; border-radius: 6px; display: flex; justify-content: space-between; }
+  .side-actions { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .side-actions button { font-size: 0.78rem; }
+  .call-bar { display:none; padding:0.5rem 1rem; background:#123128; color:#fff; align-items:center; gap:0.75rem; }
+  .call-bar.active { display:flex; }
+  #local-video, #remote-video { width: 120px; height: 90px; background:#000; border-radius:8px; object-fit:cover; }
+  .media-preview img, .media-preview video { max-width: 220px; border-radius: 8px; display:block; }
+  .media-preview audio { width: 200px; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+<div class="chat-wrap">
+  <aside class="chat-side">
+    <h3><span>Chats</span></h3>
+    <div class="side-actions">
+      <button type="button" class="btn btn-primary" id="btn-new-group" style="font-size:0.8rem;padding:0.35rem 0.6rem;">+ Group</button>
+    </div>
+    <button type="button" class="member-item" id="family-room-btn">
+      <span class="member-avatar">🏠</span>
+      <span class="info"><strong>Family room</strong><div class="meta">Everyone</div></span>
+      <span class="unread-badge" id="unread-family" hidden>0</span>
+    </button>
+    <div class="member-list" id="member-list">Loading…</div>
+  </aside>
+  <section class="chat-main">
+    <div class="chat-main-head">
+      <span id="chat-title">Select a chat</span>
+      <span>
+        <button type="button" class="icon-btn" id="btn-audio-call" title="Audio call" hidden>📞</button>
+        <button type="button" class="icon-btn" id="btn-video-call" title="Video call" hidden>📹</button>
+      </span>
+    </div>
+    <div class="call-bar" id="call-bar">
+      <video id="local-video" muted playsinline></video>
+      <video id="remote-video" playsinline></video>
+      <span id="call-status">Calling…</span>
+      <button type="button" class="btn" id="btn-end-call" style="background:#c0392b;color:#fff;">End</button>
+    </div>
+    <div class="messages" id="messages"></div>
+    <form class="composer" id="composer">
+      <div class="reply-bar" id="reply-bar" hidden><span id="reply-text"></span><button type="button" id="reply-cancel">✕</button></div>
+      <button type="button" class="icon-btn" id="btn-attach" title="Attach">📎</button>
+      <button type="button" class="icon-btn" id="btn-voice" title="Voice note">🎤</button>
+      <input type="file" id="file-input" accept="image/*,audio/*,video/*,.pdf,.doc,.docx" hidden />
+      <input type="text" id="msg-input" maxlength="2000" placeholder="Message" disabled autocomplete="off" />
+      <button type="submit" class="btn btn-primary" id="send-btn" disabled>Send</button>
+    </form>
+  </section>
+</div>
+<div id="app-footer"></div>
+<script type="module">
+import { mountNav, mountFooter } from './assets/js/nav.js';
+import { supabase } from './assets/js/supabase-client.js';
+import { requireLoggedIn } from './assets/js/session-guard.js';
+
+mountNav('chat');
+mountFooter();
+await requireLoggedIn();
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) throw new Error('Not signed in');
+
+let mode = null; // family | dm | group
+let peerId = null;
+let groupId = null;
+let replyTo = null;
+let pollTimer = null;
+let lastFingerprint = '';
+let nameCache = {};
+let unreadMap = {};
+let pc = null;
+let localStream = null;
+
+const memberList = document.getElementById('member-list');
+const messagesEl = document.getElementById('messages');
+const titleEl = document.getElementById('chat-title');
+const input = document.getElementById('msg-input');
+const sendBtn = document.getElementById('send-btn');
+const REACTIONS = ['👍','❤️','😂','😮','🙏'];
+
+function initials(name) {
+  if (!name) return '?';
+  return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
+}
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s ?? '';
+  return d.innerHTML;
+}
+function escapeAttr(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+}
+function avatarMarkup(name, photo) {
+  if (photo) return `<span class="member-avatar"><img src="${escapeAttr(photo)}" alt="" /></span>`;
+  return `<span class="member-avatar">${escapeHtml(initials(name))}</span>`;
+}
+function enableComposer(on) {
+  input.disabled = !on;
+  sendBtn.disabled = !on;
+  document.getElementById('btn-attach').disabled = !on;
+  document.getElementById('btn-voice').disabled = !on;
+  const callOk = on && (mode === 'dm' || mode === 'group');
+  document.getElementById('btn-audio-call').hidden = !callOk;
+  document.getElementById('btn-video-call').hidden = !callOk;
+}
+
+async function loadUnreads() {
+  const { data } = await supabase.rpc('chat_unread_counts');
+  unreadMap = {};
+  (data || []).forEach(r => {
+    if (r.room === 'family') unreadMap.family = Number(r.unread) || 0;
+    else if (r.room === 'dm' && r.peer_id) unreadMap['dm:' + r.peer_id] = Number(r.unread) || 0;
+    else if (r.room === 'group' && r.group_id) unreadMap['group:' + r.group_id] = Number(r.unread) || 0;
+  });
+  const fam = document.getElementById('unread-family');
+  if (unreadMap.family > 0) { fam.hidden = false; fam.textContent = unreadMap.family; }
+  else fam.hidden = true;
+}
+
+async function markRead() {
+  if (!mode) return;
+  await supabase.rpc('mark_chat_read', {
+    p_room: mode,
+    p_peer_id: mode === 'dm' ? peerId : null,
+    p_group_id: mode === 'group' ? groupId : null,
+  });
+  await loadUnreads();
+  renderSidebar();
+}
+
+async function loadDirectory() {
+  let members = [];
+  const rpc = await supabase.rpc('member_directory');
+  if (!rpc.error && rpc.data) members = rpc.data.filter(m => m.id !== user.id);
+  else {
+    const res = await supabase.from('profiles').select('id, full_name, profession, location, profile_photo_url').eq('status','approved').neq('id', user.id).order('full_name').limit(200);
+    members = res.data || [];
+  }
+  members.forEach(m => { nameCache[m.id] = m; });
+
+  let groups = [];
+  try {
+    const g = await supabase.from('chat_groups').select('id, name, description, photo_url').eq('is_active', true);
+    if (g.error) console.warn('groups load', g.error.message);
+    else groups = g.data || [];
+  } catch (e) { console.warn('groups load failed', e); }
+
+  window.__chatMembers = members;
+  window.__chatGroups = groups;
+  await loadUnreads();
+  renderSidebar();
+}
+
+function renderSidebar() {
+  const members = window.__chatMembers || [];
+  const groups = window.__chatGroups || [];
+  let html = '';
+  groups.forEach(g => {
+    const n = unreadMap['group:' + g.id] || 0;
+    html += `<button type="button" class="member-item" data-kind="group" data-id="${g.id}" data-name="${escapeAttr(g.name)}">
+      ${avatarMarkup(g.name, g.photo_url)}
+      <span class="info"><strong>${escapeHtml(g.name)}</strong><div class="meta">Group</div></span>
+      ${n ? `<span class="unread-badge">${n}</span>` : ''}
+    </button>`;
+  });
+  members.forEach(m => {
+    const n = unreadMap['dm:' + m.id] || 0;
+    const label = m.full_name || 'Member';
+    html += `<button type="button" class="member-item" data-kind="dm" data-id="${m.id}" data-name="${escapeAttr(label)}">
+      ${avatarMarkup(label, m.profile_photo_url)}
+      <span class="info"><strong>${escapeHtml(label)}${n ? ` (${n})` : ''}</strong>
+      <div class="meta">${escapeHtml([m.profession, m.location].filter(Boolean).join(' · ') || 'Member')}</div></span>
+      ${n ? `<span class="unread-badge">${n}</span>` : ''}
+    </button>`;
+  });
+  memberList.innerHTML = html || '<p style="padding:1rem;color:var(--text-muted);">No members yet.</p>';
+  memberList.querySelectorAll('.member-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.kind === 'group') openGroup(btn.dataset.id, btn.dataset.name, btn);
+      else openDm(btn.dataset.id, btn.dataset.name, btn);
+    });
+  });
+}
+
+async function fetchMessages() {
+  let q = supabase.from('chat_messages').select('id, sender_id, body, created_at, reply_to_id, media_url, media_type, media_name, room, group_id, recipient_id').order('created_at', { ascending: true }).limit(250);
+  if (mode === 'family') q = q.eq('room', 'family');
+  else if (mode === 'dm') q = q.eq('room', 'dm').or(`and(sender_id.eq.${user.id},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${user.id})`);
+  else if (mode === 'group') q = q.eq('room', 'group').eq('group_id', groupId);
+  else return [];
+  const { data } = await q;
+  return data || [];
+}
+
+async function fetchReactions(ids) {
+  if (!ids.length) return {};
+  const { data } = await supabase.from('chat_reactions').select('message_id, user_id, emoji').in('message_id', ids);
+  const map = {};
+  (data || []).forEach(r => {
+    if (!map[r.message_id]) map[r.message_id] = [];
+    map[r.message_id].push(r);
+  });
+  return map;
+}
+
+function mediaHtml(r) {
+  if (!r.media_url) return '';
+  if (r.media_type === 'image') return `<div class="media-preview"><a href="${escapeAttr(r.media_url)}" target="_blank"><img src="${escapeAttr(r.media_url)}" alt="" /></a></div>`;
+  if (r.media_type === 'video') return `<div class="media-preview"><video controls src="${escapeAttr(r.media_url)}"></video></div>`;
+  if (r.media_type === 'audio' || r.media_type === 'voice') return `<div class="media-preview"><audio controls src="${escapeAttr(r.media_url)}"></audio></div>`;
+  return `<div class="media-preview"><a href="${escapeAttr(r.media_url)}" target="_blank">📎 ${escapeHtml(r.media_name || 'File')}</a></div>`;
+}
+
+async function renderMessages(rows) {
+  const ids = rows.map(r => r.id);
+  const reactions = await fetchReactions(ids);
+  const byId = Object.fromEntries(rows.map(r => [r.id, r]));
+  const showSender = mode === 'family' || mode === 'group';
+  messagesEl.innerHTML = rows.map(r => {
+    const mine = r.sender_id === user.id;
+    const senderName = nameCache[r.sender_id]?.full_name || (mine ? 'You' : 'Member');
+    const when = r.created_at ? new Date(r.created_at).toLocaleString() : '';
+    const parent = r.reply_to_id ? byId[r.reply_to_id] : null;
+    const quote = parent ? `<div class="reply-quote">${escapeHtml((nameCache[parent.sender_id]?.full_name || '') + ': ' + (parent.body || parent.media_type || '').slice(0, 80))}</div>` : '';
+    const rx = reactions[r.id] || [];
+    const rxHtml = rx.length ? `<div class="reactions">${summarizeReactions(rx, r.id)}</div>` : '';
+    return `<div class="bubble-wrap ${mine ? 'mine' : ''}" data-id="${r.id}">
+      ${showSender && !mine ? `<div class="bubble-sender">${escapeHtml(senderName)}</div>` : ''}
+      <div class="bubble">${quote}${mediaHtml(r)}${r.body ? escapeHtml(r.body) : ''}<span class="when">${when}</span></div>
+      ${rxHtml}
+      <div class="bubble-actions">
+        <button type="button" data-act="reply" data-id="${r.id}">Reply</button>
+        ${REACTIONS.map(e => `<button type="button" data-act="react" data-id="${r.id}" data-emoji="${e}">${e}</button>`).join('')}
+      </div>
+    </div>`;
+  }).join('') || '<p style="color:var(--text-muted);">No messages yet.</p>';
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  messagesEl.querySelectorAll('[data-act="reply"]').forEach(b => b.addEventListener('click', () => setReply(b.dataset.id, byId[b.dataset.id])));
+  messagesEl.querySelectorAll('[data-act="react"]').forEach(b => b.addEventListener('click', () => toggleReaction(b.dataset.id, b.dataset.emoji)));
+}
+
+function summarizeReactions(rx, msgId) {
+  const counts = {};
+  rx.forEach(r => { counts[r.emoji] = (counts[r.emoji] || 0) + 1; });
+  return Object.entries(counts).map(([e, c]) =>
+    `<span class="reaction-chip" data-act="react" data-id="${msgId}" data-emoji="${e}">${e} ${c}</span>`
+  ).join('');
+}
+
+function setReply(id, row) {
+  replyTo = id;
+  document.getElementById('reply-bar').hidden = false;
+  document.getElementById('reply-text').textContent = 'Replying: ' + (row?.body || row?.media_type || '').slice(0, 60);
+}
+document.getElementById('reply-cancel').onclick = () => {
+  replyTo = null;
+  document.getElementById('reply-bar').hidden = true;
+};
+
+async function toggleReaction(messageId, emoji) {
+  // One reaction per user per message: same emoji toggles off; different emoji replaces.
+  const { data: mine } = await supabase
+    .from('chat_reactions')
+    .select('id, emoji')
+    .eq('message_id', messageId)
+    .eq('user_id', user.id);
+  const same = (mine || []).find((r) => r.emoji === emoji);
+  if (same) {
+    await supabase.from('chat_reactions').delete().eq('id', same.id);
+  } else {
+    if (mine?.length) {
+      await supabase.from('chat_reactions').delete().eq('message_id', messageId).eq('user_id', user.id);
+    }
+    await supabase.from('chat_reactions').insert({ message_id: messageId, user_id: user.id, emoji });
+  }
+  lastFingerprint = ''; // force redraw
+  await refreshMessages();
+}
+
+async function refreshMessages() {
+  const rows = await fetchMessages();
+  const fp = rows.map(r => r.id).join(',');
+  if (fp !== lastFingerprint) {
+    lastFingerprint = fp;
+    await renderMessages(rows);
+  }
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    await refreshMessages();
+    await loadUnreads();
+    renderSidebar();
+  }, 3000);
+}
+
+async function openFamily() {
+  mode = 'family'; peerId = null; groupId = null;
+  titleEl.textContent = 'Family room';
+  enableComposer(true);
+  document.querySelectorAll('.member-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('family-room-btn').classList.add('active');
+  lastFingerprint = '';
+  await refreshMessages();
+  await markRead();
+  startPolling();
+}
+
+async function openDm(id, name, btn) {
+  mode = 'dm'; peerId = id; groupId = null;
+  titleEl.textContent = name;
+  enableComposer(true);
+  document.querySelectorAll('.member-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('family-room-btn').classList.remove('active');
+  btn?.classList.add('active');
+  lastFingerprint = '';
+  await refreshMessages();
+  await markRead();
+  startPolling();
+}
+
+async function openGroup(id, name, btn) {
+  mode = 'group'; peerId = null; groupId = id;
+  titleEl.textContent = name;
+  enableComposer(true);
+  document.querySelectorAll('.member-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('family-room-btn').classList.remove('active');
+  btn?.classList.add('active');
+  lastFingerprint = '';
+  await refreshMessages();
+  await markRead();
+  startPolling();
+}
+
+document.getElementById('family-room-btn').addEventListener('click', openFamily);
+
+async function sendMessage({ body = '', media_url = null, media_type = null, media_name = null } = {}) {
+  if (!mode) return;
+  if (!body && !media_url) return;
+  const row = {
+    room: mode,
+    sender_id: user.id,
+    recipient_id: mode === 'dm' ? peerId : null,
+    group_id: mode === 'group' ? groupId : null,
+    body: body || (media_type === 'voice' ? 'Voice message' : media_type ? (media_name || media_type) : ''),
+    reply_to_id: replyTo,
+    media_url, media_type, media_name,
+  };
+  const { error } = await supabase.from('chat_messages').insert(row);
+  if (error) { alert(error.message); return; }
+  replyTo = null;
+  document.getElementById('reply-bar').hidden = true;
+  input.value = '';
+  lastFingerprint = '';
+  await refreshMessages();
+}
+
+document.getElementById('composer').addEventListener('submit', async e => {
+  e.preventDefault();
+  await sendMessage({ body: input.value.trim() });
+});
+
+document.getElementById('btn-attach').onclick = () => document.getElementById('file-input').click();
+document.getElementById('file-input').onchange = async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const path = `chat/${user.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+  const { error: upErr } = await supabase.storage.from('uploads').upload(path, file, { upsert: false });
+  if (upErr) { alert(upErr.message + ' (ensure uploads bucket + policies)'); return; }
+  const { data: pub } = supabase.storage.from('uploads').getPublicUrl(path);
+  let media_type = 'file';
+  if (file.type.startsWith('image/')) media_type = 'image';
+  else if (file.type.startsWith('audio/')) media_type = 'audio';
+  else if (file.type.startsWith('video/')) media_type = 'video';
+  await sendMessage({ media_url: pub.publicUrl, media_type, media_name: file.name });
+  e.target.value = '';
+};
+
+let recording = false;
+let mediaRecorder = null;
+let chunks = [];
+document.getElementById('btn-voice').onclick = async () => {
+  if (!recording) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = ev => { if (ev.data.size) chunks.push(ev.data); };
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const path = `chat/${user.id}/voice_${Date.now()}.webm`;
+        const { error } = await supabase.storage.from('uploads').upload(path, blob);
+        if (error) { alert(error.message); return; }
+        const { data: pub } = supabase.storage.from('uploads').getPublicUrl(path);
+        await sendMessage({ media_url: pub.publicUrl, media_type: 'voice', media_name: 'voice.webm', body: 'Voice message' });
+      };
+      mediaRecorder.start();
+      recording = true;
+      document.getElementById('btn-voice').textContent = '⏹';
+    } catch (err) { alert('Microphone permission needed'); }
+  } else {
+    mediaRecorder?.stop();
+    recording = false;
+    document.getElementById('btn-voice').textContent = '🎤';
+  }
+};
+
+document.getElementById('btn-new-group').onclick = async () => {
+  const name = prompt('Group name');
+  if (!name?.trim()) return;
+  const { data: g, error } = await supabase.from('chat_groups').insert({ name: name.trim(), created_by: user.id }).select('id, name').single();
+  if (error) { alert(error.message + ' — run sql/023'); return; }
+  await supabase.from('chat_group_members').insert({ group_id: g.id, user_id: user.id, role: 'admin' });
+  const add = prompt('Add member emails or leave blank (you can add later from profile IDs). Optional: paste one user UUID to invite.');
+  if (add?.trim()) {
+    await supabase.from('chat_group_members').insert({ group_id: g.id, user_id: add.trim(), role: 'member' });
+  }
+  await loadDirectory();
+  openGroup(g.id, g.name);
+};
+
+// --- Simple 1:1 WebRTC via chat_calls signaling (STUN only; may fail behind strict NAT) ---
+const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+
+async function startCall(callType) {
+  if (mode !== 'dm') { alert('Video/audio calls currently work best in 1:1 DM. Group calls need a dedicated SFU (e.g. Daily/LiveKit).'); return; }
+  document.getElementById('call-bar').classList.add('active');
+  document.getElementById('call-status').textContent = 'Starting ' + callType + ' call…';
+  localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: callType === 'video' });
+  document.getElementById('local-video').srcObject = localStream;
+  pc = new RTCPeerConnection({ iceServers });
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.ontrack = (ev) => { document.getElementById('remote-video').srcObject = ev.streams[0]; };
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  const { data: call } = await supabase.from('chat_calls').insert({
+    room: 'dm', peer_id: peerId, caller_id: user.id, call_type: callType, status: 'ringing',
+    signal: { offer },
+  }).select('id').single();
+  pc.onicecandidate = async (ev) => {
+    if (ev.candidate && call?.id) {
+      await supabase.from('chat_calls').update({ signal: { offer, ice: ev.candidate } }).eq('id', call.id);
+    }
+  };
+  document.getElementById('call-status').textContent = 'Ringing… (peer must accept)';
+  window.__activeCallId = call?.id;
+}
+
+document.getElementById('btn-audio-call').onclick = () => startCall('audio');
+document.getElementById('btn-video-call').onclick = () => startCall('video');
+document.getElementById('btn-end-call').onclick = async () => {
+  document.getElementById('call-bar').classList.remove('active');
+  pc?.close();
+  localStream?.getTracks().forEach(t => t.stop());
+  if (window.__activeCallId) await supabase.from('chat_calls').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', window.__activeCallId);
+};
+
+await loadDirectory();
+</script>
+</body>
+</html>

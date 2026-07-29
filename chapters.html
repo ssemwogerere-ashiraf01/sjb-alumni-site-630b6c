@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Regional Chapters — SJB Association</title>
+<meta name="description" content="Find SJB Association regional chapters near you." />
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+<div id="app-nav"></div>
+<main class="section" style="padding-top:3rem;">
+  <div class="section-head">
+    <span class="eyebrow">Community</span>
+    <h2>Regional chapters</h2>
+    <p style="color:var(--text-muted);">Local groups help members meet, organise events, and support one another in their region. Chapter details are published by admins.</p>
+  </div>
+  <div class="card-grid" id="chapters-grid">
+    <p style="text-align:center;color:var(--text-muted);grid-column:1/-1;">Loading chapters…</p>
+  </div>
+  <p style="text-align:center;margin-top:2rem;color:var(--text-muted);font-size:0.9rem;">
+    Want a chapter in your area? <a href="contact.html">Contact the admin desk</a> after you are an approved member.
+  </p>
+</main>
+<div id="app-footer"></div>
+<script type="module">
+  import { supabase } from './assets/js/supabase-client.js';
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+  mountNav('chapters');
+  mountFooter();
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+
+  const grid = document.getElementById('chapters-grid');
+  const { data, error } = await supabase
+    .from('chapters')
+    .select('id, name, region, description, contact_email')
+    .order('name');
+
+  if (error) {
+    grid.innerHTML = `<p style="text-align:center;color:var(--text-muted);grid-column:1/-1;">Could not load chapters. ${escapeHtml(error.message)}</p>`;
+  } else if (!data?.length) {
+    grid.innerHTML = `<p style="text-align:center;color:var(--text-muted);grid-column:1/-1;">No regional chapters have been published yet. Check back soon or ask an admin to add your region.</p>`;
+  } else {
+    grid.innerHTML = data.map(c => `
+      <div class="card">
+        <h3>${escapeHtml(c.name)}</h3>
+        ${c.region ? `<p style="margin:0 0 0.5rem;font-size:0.85rem;color:var(--forest);font-weight:600;">${escapeHtml(c.region)}</p>` : ''}
+        <p>${escapeHtml(c.description || 'Chapter details will appear here.')}</p>
+        ${c.contact_email ? `<p style="margin-top:0.75rem;font-size:0.88rem;"><a href="mailto:${escapeHtml(c.contact_email)}">${escapeHtml(c.contact_email)}</a></p>` : ''}
+      </div>
+    `).join('');
+  }
+</script>
+</body>
+</html>

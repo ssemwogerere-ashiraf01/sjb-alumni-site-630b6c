@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>About Us — SJB Association</title>
+<meta name="description" content="Learn about the SJB Alumni & Members Association — our history, vision, mission, values, and how membership works." />
+<link rel="stylesheet" href="assets/css/style.css" />
+<style>
+  .about-hero {
+    background: linear-gradient(135deg, var(--ink-navy), var(--forest-dark));
+    color: #fff; padding: 3.5rem 2rem 3rem; text-align: center;
+  }
+  .about-hero h1 { color: #fff; margin: 0.5rem 0 0.75rem; font-size: clamp(1.9rem, 4vw, 2.75rem); }
+  .about-hero p { color: #d9e2dc; max-width: 640px; margin: 0 auto; font-size: 1.05rem; }
+  .about-hero .eyebrow { color: var(--gold-soft); }
+  .vm-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem; max-width: 1080px; margin: -2rem auto 0; padding: 0 2rem; position: relative; z-index: 2;
+  }
+  .vm-card {
+    background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 1.75rem 1.5rem;
+  }
+  .vm-card h3 { margin: 0 0 0.6rem; font-size: 1.2rem; }
+  .vm-card .icon-label {
+    display: inline-block; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--forest); margin-bottom: 0.35rem;
+  }
+  .vm-card p { margin: 0; color: var(--text-muted); font-size: 0.95rem; }
+  .prose { max-width: 720px; margin: 0 auto; color: var(--text-muted); }
+  .prose p { margin: 0 0 1rem; }
+  .values-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem;
+  }
+  .value-item {
+    background: var(--paper); border-left: 4px solid var(--gold); padding: 1.1rem 1.2rem;
+    border-radius: 0 var(--radius) var(--radius) 0; border: 1px solid var(--border); border-left-width: 4px;
+  }
+  .value-item strong { display: block; color: var(--ink-navy); margin-bottom: 0.35rem; font-family: 'Fraunces', serif; }
+  .value-item span { color: var(--text-muted); font-size: 0.9rem; }
+  .timeline { max-width: 720px; margin: 0 auto; position: relative; padding-left: 1.5rem; }
+  .timeline::before {
+    content: ''; position: absolute; left: 0.35rem; top: 0.25rem; bottom: 0.25rem;
+    width: 2px; background: var(--border);
+  }
+  .timeline-item { position: relative; padding: 0 0 1.5rem 1.25rem; }
+  .timeline-item::before {
+    content: ''; position: absolute; left: -1.28rem; top: 0.35rem;
+    width: 10px; height: 10px; border-radius: 50%; background: var(--forest); border: 2px solid var(--parchment);
+  }
+  .timeline-item strong { display: block; color: var(--ink-navy); font-family: 'Fraunces', serif; }
+  .timeline-item span { color: var(--text-muted); font-size: 0.92rem; }
+  .cta-band {
+    background: var(--ink-navy); color: #fff; text-align: center; padding: 3rem 2rem; margin-top: 1rem;
+  }
+  .cta-band h2 { color: #fff; margin: 0 0 0.75rem; }
+  .cta-band p { color: #c5cdd8; max-width: 520px; margin: 0 auto 1.5rem; }
+  .link-row { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+
+<header class="about-hero">
+  <span class="eyebrow">About the Association</span>
+  <h1>St. Josephine Bakhita Alumni &amp; Members Association</h1>
+  <p>A chartered community of alumni and affiliated members who save together, vote together, and show up for one another — long after the classroom.</p>
+</header>
+
+<div class="vm-grid">
+  <div class="vm-card">
+    <span class="icon-label">Vision</span>
+    <h3>A lasting network of mutual support</h3>
+    <p>We envision an association where every member — alumni and non-alumni alike — can rely on a transparent, democratic, and financially responsible community that advances opportunity across generations.</p>
+  </div>
+  <div class="vm-card">
+    <span class="icon-label">Mission</span>
+    <h3>Connect, empower, and govern fairly</h3>
+    <p>To keep members connected through mutual savings, mentorship, job referrals, regional chapters, and open leadership elections — with membership by approval and alumni status verified against our records.</p>
+  </div>
+  <div class="vm-card">
+    <span class="icon-label">Promise</span>
+    <h3>Accountability you can see</h3>
+    <p>Fees, savings contributions, and election results live in systems members can inspect. Critical changes require Super Admin oversight; day-to-day approvals stay with trusted admins.</p>
+  </div>
+</div>
+
+<section class="section" id="story">
+  <div class="section-head">
+    <span class="eyebrow">Our story</span>
+    <h2>Built on the same roll our founders signed</h2>
+  </div>
+  <div class="prose">
+    <p>
+      The SJB Association grew from a simple need: graduates and friends of the community wanted a dependable way to stay linked — not only for reunions, but for practical solidarity. Mutual savings groups, job tips, and fair elections for executive roles became the backbone of that idea.
+    </p>
+    <p>
+      Today the association operates as a membership body. Applications are reviewed by an admin before an account is activated. Alumni status is checked against our records; non-alumni may join under a separate membership class and fee. Once approved and fee-paid, members can join savings groups, stand or vote in elections, post on the job board, and take part in forums and events.
+    </p>
+    <p>
+      We are named in honour of St. Josephine Bakhita — a witness to dignity, resilience, and care for others. That spirit shapes how we treat one another in governance, money, and everyday conversation.
+    </p>
+  </div>
+</section>
+
+<section class="section" id="values" style="background:var(--paper);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+  <div class="section-head">
+    <span class="eyebrow">What we stand for</span>
+    <h2>Core values</h2>
+  </div>
+  <div class="values-grid" style="max-width:1080px;margin:0 auto;">
+    <div class="value-item"><strong>Integrity</strong><span>Honest books, honest votes, and honest speech in association business.</span></div>
+    <div class="value-item"><strong>Solidarity</strong><span>Savings and mutual aid so members can weather hard seasons together.</span></div>
+    <div class="value-item"><strong>Transparency</strong><span>Clear rules, visible leadership, and records members can request.</span></div>
+    <div class="value-item"><strong>Inclusion</strong><span>Alumni and non-alumni pathways, with fair fees and equal dignity.</span></div>
+    <div class="value-item"><strong>Service</strong><span>Leadership is temporary stewardship, not personal ownership of the association.</span></div>
+    <div class="value-item"><strong>Respect</strong><span>Debate ideas firmly; treat people gently — online and offline.</span></div>
+  </div>
+</section>
+
+<section class="section" id="how-membership-works">
+  <div class="section-head">
+    <span class="eyebrow">Membership</span>
+    <h2>How joining works</h2>
+  </div>
+  <div class="timeline">
+    <div class="timeline-item">
+      <strong>1. Register</strong>
+      <span>Create an account with your email, name, and membership class (alumni or non-alumni).</span>
+    </div>
+    <div class="timeline-item">
+      <strong>2. Admin review</strong>
+      <span>An admin verifies your details. Pending accounts cannot access member-only tools until approved.</span>
+    </div>
+    <div class="timeline-item">
+      <strong>3. Membership fee</strong>
+      <span>Pay the published fee (alumni / non-alumni rates) securely. Your profile is marked paid only after verification.</span>
+    </div>
+    <div class="timeline-item">
+      <strong>4. Full access</strong>
+      <span>Join savings groups, vote in elections, use the forum, job board, and event registration.</span>
+    </div>
+  </div>
+  <p style="text-align:center;margin-top:2rem;color:var(--text-muted);">
+    Full conduct rules are published in our <a href="rules.html"><strong>Members’ Code &amp; Principles</strong></a> (readable online and downloadable as a protected PDF).
+  </p>
+</section>
+
+<section class="section" id="governance" style="background:var(--paper);border-top:1px solid var(--border);">
+  <div class="section-head">
+    <span class="eyebrow">Governance</span>
+    <h2>How decisions are made</h2>
+  </div>
+  <div class="prose">
+    <p>
+      Day-to-day member approvals and content creation are handled by association <strong>admins</strong>. Sensitive actions — permanent account deletion, role elevation, publishing or deleting critical content, savings activations, withdrawals, and closing elections — are reserved for the <strong>Super Admin</strong>.
+    </p>
+    <p>
+      Executive leadership is chosen through scheduled <a href="elections/index.html">elections</a> open to approved members. Winners may be promoted to leadership roles when an election is formally closed.
+    </p>
+  </div>
+  <div class="link-row" style="margin-top:2rem;">
+    <a href="leadership.html" class="btn btn-gold">Current leadership</a>
+    <a href="rules.html" class="btn btn-outline-light" style="background:var(--ink-navy);color:#fff;">Members’ rules</a>
+    <a href="contact.html" class="btn btn-outline-light" style="border:1px solid var(--border);color:var(--ink-navy);">Contact</a>
+  </div>
+</section>
+
+<div class="cta-band">
+  <h2>Ready to belong?</h2>
+  <p>Membership is by approval. Start your application today, or sign in if you already have an account.</p>
+  <div class="link-row">
+    <a href="register.html" class="btn btn-gold">Become a Member</a>
+    <a href="login.html" class="btn btn-outline-light">Member Sign In</a>
+  </div>
+</div>
+
+<div id="app-footer"></div>
+<script type="module">
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+  mountNav('about');
+  mountFooter();
+</script>
+</body>
+</html>

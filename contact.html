@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Contact — SJB Association</title>
+<meta name="description" content="Contact the SJB Association for membership questions, savings support, or general enquiries." />
+<link rel="stylesheet" href="assets/css/style.css" />
+<style>
+  .contact-wrap { max-width: 920px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+  .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+  @media (max-width: 800px) { .contact-grid { grid-template-columns: 1fr; } }
+  .contact-card {
+    background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 1.5rem; margin-bottom: 1.25rem;
+  }
+  .contact-card h3 { margin-top: 0; }
+  .contact-card p { color: var(--text-muted); margin: 0.35rem 0; }
+  .ai-box { max-height: 280px; overflow-y: auto; background: var(--parchment); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.85rem; margin-bottom: 0.75rem; }
+  .ai-msg { margin: 0.5rem 0; font-size: 0.9rem; }
+  .ai-msg.user { text-align: right; color: var(--forest); font-weight: 600; }
+  .ai-msg.bot { color: var(--text); }
+  .form-row { margin-bottom: 0.85rem; }
+  .form-row label { display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 0.3rem; }
+  .form-row input, .form-row textarea, .form-row select {
+    width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--paper); color: var(--text); font-family: inherit;
+  }
+  .form-row textarea { min-height: 110px; resize: vertical; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+<div class="contact-wrap">
+  <div class="section-head" style="text-align:left;max-width:none;margin:0 0 1.5rem;">
+    <span class="eyebrow">Support</span>
+    <h2 style="margin:0.35rem 0;">Contact the association</h2>
+    <p style="color:var(--text-muted);margin:0;">Send a message to administrators, get instant FAQ answers, or use email / WhatsApp.</p>
+  </div>
+
+  <div class="contact-grid">
+    <div class="contact-card">
+      <h3>Message administrators</h3>
+      <p>Your note is stored for the admin team. Prefer email or WhatsApp for urgent cases.</p>
+      <form id="contact-form">
+        <div class="form-row">
+          <label for="c-name">Full name *</label>
+          <input id="c-name" name="name" required maxlength="120" />
+        </div>
+        <div class="form-row">
+          <label for="c-email">Email *</label>
+          <input id="c-email" name="email" type="email" required maxlength="200" />
+        </div>
+        <div class="form-row">
+          <label for="c-phone">Phone / WhatsApp (optional)</label>
+          <input id="c-phone" name="phone" maxlength="40" placeholder="+256…" />
+        </div>
+        <div class="form-row">
+          <label for="c-topic">Topic</label>
+          <select id="c-topic" name="topic">
+            <option value="membership">Membership / approval</option>
+            <option value="fees">Fees &amp; payments</option>
+            <option value="savings">Savings groups</option>
+            <option value="elections">Elections</option>
+            <option value="technical">Website / login</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="c-message">Message *</label>
+          <textarea id="c-message" name="message" required maxlength="4000"></textarea>
+        </div>
+        <div id="contact-alert"></div>
+        <button type="submit" class="btn btn-primary" id="contact-submit">Send message</button>
+      </form>
+      <p style="margin-top:1rem;font-size:0.85rem;">
+        Or email <a href="mailto:admin@sjbassociation.org">admin@sjbassociation.org</a>
+        · <a href="https://wa.me/" id="wa-link" target="_blank" rel="noopener">WhatsApp admin</a>
+      </p>
+    </div>
+
+    <div class="contact-card">
+      <h3>Quick answers (assistant)</h3>
+      <p>Ask about membership, fees, savings, or elections. Instant answers from our knowledge base — not a substitute for admin decisions.</p>
+      <div class="ai-box" id="ai-box" aria-live="polite">
+        <div class="ai-msg bot">Hello — ask a question about the association (e.g. “How do I join?” or “What are the fees?”).</div>
+      </div>
+      <form id="ai-form" style="display:flex;gap:0.5rem;">
+        <input id="ai-input" style="flex:1;padding:0.55rem 0.7rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--paper);color:var(--text);" placeholder="Type your question…" maxlength="300" />
+        <button type="submit" class="btn btn-primary">Ask</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="contact-card">
+    <h3>Helpful links</h3>
+    <p><a href="about.html">About Us</a> · <a href="rules.html">Members’ Code</a> · <a href="reset-password.html">Reset password</a>
+    · <a href="register.html">Become a member</a> · <a href="login.html">Sign in</a></p>
+  </div>
+</div>
+<div id="app-footer"></div>
+<script type="module">
+  import { mountNav, mountFooter } from './assets/js/nav.js';
+  import { supabase } from './assets/js/supabase-client.js';
+  import { SOCIAL_LINKS } from './assets/js/site-config.js';
+
+  mountNav('contact');
+  mountFooter();
+
+  const wa = document.getElementById('wa-link');
+  if (wa && SOCIAL_LINKS.whatsapp) wa.href = SOCIAL_LINKS.whatsapp;
+
+  // Prefill if logged in
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: p } = await supabase.from('profiles').select('full_name, email, phone').eq('id', user.id).maybeSingle();
+      if (p?.full_name) document.getElementById('c-name').value = p.full_name;
+      if (p?.email || user.email) document.getElementById('c-email').value = p?.email || user.email;
+      if (p?.phone) document.getElementById('c-phone').value = p.phone;
+    }
+  } catch { /* ignore */ }
+
+  document.getElementById('contact-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const alert = document.getElementById('contact-alert');
+    const btn = document.getElementById('contact-submit');
+    const payload = {
+      name: document.getElementById('c-name').value.trim(),
+      email: document.getElementById('c-email').value.trim(),
+      phone: document.getElementById('c-phone').value.trim() || null,
+      topic: document.getElementById('c-topic').value,
+      message: document.getElementById('c-message').value.trim(),
+    };
+    btn.disabled = true;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const row = { ...payload, user_id: user?.id || null, status: 'new' };
+      const { error } = await supabase.from('contact_messages').insert(row);
+      if (error) throw error;
+      alert.innerHTML = '<div class="alert alert-success">Message sent. An administrator will follow up by email or WhatsApp when possible.</div>';
+      document.getElementById('c-message').value = '';
+      // Open mailto as a reliable backup channel for the visitor
+      const subject = encodeURIComponent(`[SJB Contact] ${payload.topic}`);
+      const body = encodeURIComponent(`Name: ${payload.name}\nEmail: ${payload.email}\nPhone: ${payload.phone || '—'}\n\n${payload.message}`);
+      // Do not force-navigate; storage is primary
+    } catch (err) {
+      // Fallback: mailto if table missing
+      const subject = encodeURIComponent(`[SJB Contact] ${document.getElementById('c-topic').value}`);
+      const body = encodeURIComponent(
+        `Name: ${document.getElementById('c-name').value}\nEmail: ${document.getElementById('c-email').value}\nPhone: ${document.getElementById('c-phone').value}\n\n${document.getElementById('c-message').value}`
+      );
+      window.location.href = `mailto:admin@sjbassociation.org?subject=${subject}&body=${body}`;
+      alert.innerHTML = '<div class="alert alert-success">Opening your email client to reach admins…</div>';
+    }
+    btn.disabled = false;
+  });
+
+  const FAQ = [
+    { keys: ['join', 'register', 'member', 'membership', 'sign up', 'signup'], a: 'To join: (1) Register with email and choose alumni or non-alumni, (2) wait for admin approval, (3) pay the membership fee. Then you can use savings, elections, and member tools.' },
+    { keys: ['fee', 'pay', 'payment', 'cost', 'price', 'alumni'], a: 'Membership fees are set in app settings (alumni and non-alumni rates, typically UGX). Pay via Flutterwave after approval. Savings groups have separate monthly contributions and join fees.' },
+    { keys: ['savings', 'contribution', 'withdraw'], a: 'Approved, fee-paid members can request to join a savings group. Admins activate membership after join-fee payment. Monthly contributions are tracked per group; withdrawals need admin approval.' },
+    { keys: ['election', 'vote', 'candidate'], a: 'Approved members can vote in active elections during the open window. Candidates must be approved. Results are tallied without exposing who voted for whom.' },
+    { keys: ['login', 'password', 'otp', 'locked', 'sign in'], a: 'Sign-in uses password plus email OTP. After several failed attempts the account may lock temporarily. Use Reset Password on the site if you forgot your password.' },
+    { keys: ['contact', 'admin', 'help', 'support'], a: 'Use this contact form, email admin@sjbassociation.org, or WhatsApp from the link on this page. Admins reply when they can — for urgent account issues include the email on your profile.' },
+    { keys: ['rule', 'code', 'conduct'], a: 'Full conduct rules are in Members’ Code & Principles (rules page). Leadership is temporary stewardship; integrity and transparency are core values.' },
+  ];
+
+  function answerQuestion(q) {
+    const t = q.toLowerCase();
+    for (const item of FAQ) {
+      if (item.keys.some((k) => t.includes(k))) return item.a;
+    }
+    return 'I do not have a specific answer for that yet. Please send the administrators a message using the form, or email admin@sjbassociation.org — they can reply by email or WhatsApp.';
+  }
+
+  const aiBox = document.getElementById('ai-box');
+  document.getElementById('ai-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = document.getElementById('ai-input');
+    const q = input.value.trim();
+    if (!q) return;
+    aiBox.innerHTML += `<div class="ai-msg user">${q.replace(/</g, '&lt;')}</div>`;
+    aiBox.innerHTML += `<div class="ai-msg bot">${answerQuestion(q)}</div>`;
+    input.value = '';
+    aiBox.scrollTop = aiBox.scrollHeight;
+  });
+</script>
+</body>
+</html>

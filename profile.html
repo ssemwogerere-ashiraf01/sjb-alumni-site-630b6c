@@ -4,24 +4,48 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
-<title>My Profile — SJB Association</title>
+<title>Profile — SJB Association</title>
 <link rel="stylesheet" href="assets/css/style.css" />
 <style>
-  .profile-wrap { max-width: 640px; margin: 0 auto; padding: 3rem 2rem; }
+  .profile-wrap { max-width: 720px; margin: 0 auto; padding: 3rem 2rem; }
   .profile-card { background:var(--paper); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:2rem; margin-bottom:1.5rem; }
-  .readonly-row { display:flex; justify-content:space-between; padding:0.6rem 0; border-bottom:1px solid var(--border); font-size:0.92rem; }
+  .readonly-row { display:flex; justify-content:space-between; gap:1rem; padding:0.6rem 0; border-bottom:1px solid var(--border); font-size:0.92rem; }
   .readonly-row:last-child { border-bottom:none; }
   .readonly-row span:first-child { color:var(--text-muted); }
-  .readonly-row span:last-child { font-weight:600; color:var(--ink-navy); }
+  .readonly-row span:last-child { font-weight:600; color:var(--ink-navy); text-align:right; }
+  .admin-banner {
+    background: linear-gradient(135deg, #1b4332, #16233a);
+    color: #fff; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.25rem;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;
+  }
+  .admin-banner a { color: #d4af37; font-weight: 600; text-decoration: none; }
+  .admin-banner a:hover { text-decoration: underline; }
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 560px) { .form-row-2 { grid-template-columns: 1fr; } }
+  .pill { display:inline-block; padding:0.15rem 0.55rem; border-radius:12px; font-size:0.78rem; font-weight:600; }
+  .pill-approved, .pill-active { background:#dcfce7; color:#15803d; }
+  .pill-pending { background:#fef9c3; color:#a16207; }
+  .pill-suspended, .pill-rejected { background:#fee2e2; color:#b91c1c; }
 </style>
 </head>
 <body>
 <div id="app-nav"></div>
 
 <div class="profile-wrap">
+  <div id="admin-banner" class="admin-banner" hidden>
+    <div>
+      <strong>Admin view</strong>
+      <div style="font-size:0.88rem;opacity:0.9;margin-top:0.2rem;" id="admin-banner-sub">Editing another member’s profile</div>
+    </div>
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+      <a href="admin/super-admin.html" id="back-super">← Super Admin</a>
+      <a href="admin/index.html" id="back-admin">← Admin Dashboard</a>
+    </div>
+  </div>
+
   <div class="section-head" style="text-align:left;margin:0 0 1.5rem;">
-    <h2 style="margin:0;">My Profile</h2>
-    <p style="color:var(--text-muted);margin:0.4rem 0 0;">You can update your own contact details below. Membership status, fee, and role can only be changed by an admin.</p>
+    <h2 style="margin:0;" id="page-title">My Profile</h2>
+    <p style="color:var(--text-muted);margin:0.4rem 0 0;" id="page-subtitle">You can update your own contact details below. Membership status, fee, and role can only be changed by an admin.</p>
   </div>
 
   <div class="profile-card">
@@ -30,10 +54,12 @@
     <div class="readonly-row"><span>Membership type</span><span id="ro-class"></span></div>
     <div class="readonly-row"><span>Account status</span><span id="ro-status"></span></div>
     <div class="readonly-row"><span>Membership fee</span><span id="ro-fee"></span></div>
+    <div class="readonly-row"><span>Role</span><span id="ro-role"></span></div>
+    <div class="readonly-row"><span>Joined</span><span id="ro-joined"></span></div>
   </div>
 
   <div class="profile-card">
-    <h3 style="margin-top:0;">Edit my details</h3>
+    <h3 style="margin-top:0;" id="edit-heading">Edit my details</h3>
     <div id="alert-box"></div>
     <form id="profile-form">
       <div class="form-group"><label for="full_name">Full name</label><input type="text" id="full_name" required /></div>
@@ -41,12 +67,55 @@
       <div class="form-group"><label for="profession">Profession</label><input type="text" id="profession" /></div>
       <div class="form-group"><label for="location">Location</label><input type="text" id="location" /></div>
       <div class="form-group" id="grad-group"><label for="graduation_year">Graduation year</label><input type="number" id="graduation_year" min="1970" max="2030" /></div>
+
+      <!-- Admin-only sensitive fields (shown when admin_view is active) -->
+      <div id="admin-fields" hidden>
+        <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0;" />
+        <p style="color:var(--text-muted);font-size:0.88rem;margin:0 0 1rem;">Admin controls — these fields are restricted for regular members.</p>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="membership_class">Membership class</label>
+            <select id="membership_class">
+              <option value="alumni">Alumni</option>
+              <option value="non_alumni">Non-Alumni</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="status">Account status</label>
+            <select id="status">
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="suspended">Suspended</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="membership_fee_paid">Membership fee</label>
+            <select id="membership_fee_paid">
+              <option value="false">Not paid</option>
+              <option value="true">Paid</option>
+            </select>
+          </div>
+          <div class="form-group" id="role-group">
+            <label for="role">Role</label>
+            <select id="role">
+              <option value="member">Member</option>
+              <option value="leader">Leader</option>
+              <option value="admin">Admin</option>
+            </select>
+            <small style="color:var(--text-muted);">Role changes require Super Admin privileges in the database.</small>
+          </div>
+        </div>
+      </div>
+
       <div class="form-group">
         <label for="avatar_file">Profile photo</label>
-        <div style="display:flex;align-items:center;gap:1rem;">
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
           <img id="avatar-preview" src="" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;background:var(--border);display:none;" />
           <span id="avatar-fallback" style="width:64px;height:64px;border-radius:50%;background:var(--gold);color:var(--ink-navy);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:'Fraunces',serif;"></span>
-          <input type="file" id="avatar_file" accept="image/png,image/jpeg,image/webp" style="flex:1;" />
+          <input type="file" id="avatar_file" accept="image/png,image/jpeg,image/webp" style="flex:1;min-width:160px;" />
         </div>
         <small style="color:var(--text-muted);">JPG, PNG or WEBP, up to 10MB.</small>
       </div>
@@ -54,7 +123,7 @@
     </form>
   </div>
 
-  <div class="profile-card">
+  <div class="profile-card" id="password-card">
     <h3 style="margin-top:0;">Change password</h3>
     <div id="pw-alert-box"></div>
     <form id="password-form">
@@ -69,39 +138,145 @@
 
 <script type="module">
   import { supabase } from './assets/js/supabase-client.js';
-  import { requireApprovedMember } from './assets/js/session-guard.js';
+  import { requireApprovedMember, requireLoggedIn } from './assets/js/session-guard.js';
   import { mountNav, mountFooter } from './assets/js/nav.js';
 
   mountNav('profile');
   mountFooter();
 
-  const profile = await requireApprovedMember();
-  if (!profile) throw new Error('redirecting');
+  const params = new URLSearchParams(window.location.search);
+  const adminViewId = params.get('admin_view');
+  let isAdminMode = false;
+  let viewerIsSuperAdmin = false;
+  let targetId = null;
+  let profile = null;
 
-  document.getElementById('ro-email').textContent = profile.email;
-  document.getElementById('ro-class').textContent = profile.membership_class === 'alumni' ? 'Alumni' : 'Non-Alumni';
-  document.getElementById('ro-status').textContent = profile.status;
-  document.getElementById('ro-fee').textContent = profile.membership_fee_paid ? 'Paid ✓' : 'Not paid';
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
 
-  document.getElementById('full_name').value = profile.full_name || '';
-  document.getElementById('phone').value = profile.phone || '';
-  document.getElementById('profession').value = profile.profession || '';
-  document.getElementById('location').value = profile.location || '';
-  document.getElementById('graduation_year').value = profile.graduation_year || '';
-  document.getElementById('grad-group').style.display = profile.membership_class === 'alumni' ? 'block' : 'none';
-
-  renderAvatar(profile.profile_photo_url, profile.full_name);
+  function statusPill(status) {
+    const s = status || '—';
+    const cls = s === 'approved' ? 'pill-approved'
+      : s === 'pending' ? 'pill-pending'
+      : (s === 'suspended' || s === 'rejected') ? 'pill-suspended'
+      : '';
+    return `<span class="pill ${cls}">${escapeHtml(s)}</span>`;
+  }
 
   function renderAvatar(url, name) {
     const img = document.getElementById('avatar-preview');
     const fallback = document.getElementById('avatar-fallback');
     if (url) {
-      img.src = url; img.style.display = 'block'; fallback.style.display = 'none';
+      img.src = url;
+      img.style.display = 'block';
+      fallback.style.display = 'none';
     } else {
-      img.style.display = 'none'; fallback.style.display = 'flex';
+      img.style.display = 'none';
+      fallback.style.display = 'flex';
       fallback.textContent = (name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
     }
   }
+
+  function fillForm(p) {
+    document.getElementById('ro-email').textContent = p.email || '—';
+    document.getElementById('ro-class').textContent = p.membership_class === 'alumni' ? 'Alumni' : (p.membership_class === 'non_alumni' ? 'Non-Alumni' : (p.membership_class || '—'));
+    document.getElementById('ro-status').innerHTML = statusPill(p.status);
+    document.getElementById('ro-fee').textContent = p.membership_fee_paid
+      ? (`Paid ✓` + (p.membership_fee_paid_at ? ` (${new Date(p.membership_fee_paid_at).toLocaleDateString()})` : ''))
+      : 'Not paid';
+    document.getElementById('ro-role').textContent = p.is_super_admin ? 'Super Admin' : (p.role || 'member');
+    document.getElementById('ro-joined').textContent = p.created_at
+      ? new Date(p.created_at).toLocaleDateString()
+      : '—';
+
+    document.getElementById('full_name').value = p.full_name || '';
+    document.getElementById('phone').value = p.phone || '';
+    document.getElementById('profession').value = p.profession || '';
+    document.getElementById('location').value = p.location || '';
+    document.getElementById('graduation_year').value = p.graduation_year || '';
+    document.getElementById('grad-group').style.display =
+      (p.membership_class === 'alumni' || isAdminMode) ? 'block' : 'none';
+
+    if (isAdminMode) {
+      document.getElementById('membership_class').value = p.membership_class || 'non_alumni';
+      document.getElementById('status').value = p.status || 'pending';
+      document.getElementById('membership_fee_paid').value = p.membership_fee_paid ? 'true' : 'false';
+      document.getElementById('role').value = p.role || 'member';
+      // Don't allow editing super-admin role via this form
+      if (p.is_super_admin) {
+        document.getElementById('role-group').innerHTML =
+          '<label>Role</label><p style="margin:0.35rem 0 0;font-weight:600;">Super Admin (cannot change here)</p>';
+      }
+    }
+
+    renderAvatar(p.profile_photo_url, p.full_name);
+  }
+
+  // ---- Resolve who we're editing ----
+  if (adminViewId) {
+    // Must be logged in as admin / super admin
+    const session = await requireLoggedIn();
+    if (!session) throw new Error('redirecting');
+
+    const { data: viewer, error: viewerErr } = await supabase
+      .from('profiles')
+      .select('id, role, is_super_admin, full_name')
+      .eq('id', session.user.id)
+      .single();
+
+    if (viewerErr || !viewer || (viewer.role !== 'admin' && !viewer.is_super_admin)) {
+      window.location.href = './dashboard.html';
+      throw new Error('redirecting');
+    }
+
+    viewerIsSuperAdmin = !!viewer.is_super_admin;
+    isAdminMode = true;
+    targetId = adminViewId;
+
+    const { data: target, error: targetErr } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', adminViewId)
+      .single();
+
+    if (targetErr || !target) {
+      document.querySelector('.profile-wrap').innerHTML = `
+        <div class="profile-card">
+          <h2 style="margin-top:0;">Member not found</h2>
+          <p style="color:var(--text-muted);">Could not load that profile.${targetErr ? ' ' + escapeHtml(targetErr.message) : ''}</p>
+          <p><a href="admin/super-admin.html">← Back to Super Admin</a> · <a href="admin/index.html">Admin Dashboard</a></p>
+        </div>`;
+      throw new Error('not found');
+    }
+
+    profile = target;
+    document.title = `${target.full_name || 'Member'} — Admin Profile`;
+    document.getElementById('admin-banner').hidden = false;
+    document.getElementById('admin-banner-sub').textContent =
+      `Editing ${target.full_name || target.email || 'member'}`;
+    document.getElementById('page-title').textContent = target.full_name || 'Member profile';
+    document.getElementById('page-subtitle').textContent =
+      'Update contact details and membership fields for this member. Changes are saved to their profile immediately.';
+    document.getElementById('edit-heading').textContent = 'Edit member details';
+    document.getElementById('admin-fields').hidden = false;
+    // Password change only works for the signed-in user
+    document.getElementById('password-card').hidden = true;
+  } else {
+    profile = await requireApprovedMember();
+    if (!profile) throw new Error('redirecting');
+    targetId = profile.id;
+  }
+
+  fillForm(profile);
+
+  // Show/hide grad year when class changes in admin mode
+  document.getElementById('membership_class')?.addEventListener('change', (e) => {
+    document.getElementById('grad-group').style.display =
+      e.target.value === 'alumni' || isAdminMode ? 'block' : 'none';
+  });
 
   document.getElementById('avatar_file').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -115,28 +290,32 @@
     }
 
     alertBox.innerHTML = `<div class="alert alert-success">Uploading photo...</div>`;
-    const ext = file.name.split('.').pop();
-    const path = `${profile.id}/avatar.${ext}`;
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+    const path = `${targetId}/avatar.${ext}`;
 
-    // upsert:true so re-uploading just replaces the previous photo at the
-    // same path, instead of erroring or accumulating old files forever.
-    const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, cacheControl: '3600' });
+    const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, file, {
+      upsert: true,
+      cacheControl: '3600',
+      contentType: file.type,
+    });
     if (uploadErr) {
-      alertBox.innerHTML = `<div class="alert alert-error">Upload failed: ${uploadErr.message}</div>`;
+      alertBox.innerHTML = `<div class="alert alert-error">Upload failed: ${escapeHtml(uploadErr.message)}</div>`;
       return;
     }
 
     const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
-    // Cache-bust so the browser doesn't keep showing the old cached image
-    // at the same URL after a re-upload.
     const freshUrl = `${pub.publicUrl}?t=${Date.now()}`;
 
-    const { error: dbErr } = await supabase.from('profiles').update({ profile_photo_url: freshUrl }).eq('id', profile.id);
+    const { error: dbErr } = await supabase
+      .from('profiles')
+      .update({ profile_photo_url: freshUrl })
+      .eq('id', targetId);
     if (dbErr) {
-      alertBox.innerHTML = `<div class="alert alert-error">${dbErr.message}</div>`;
+      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(dbErr.message)}</div>`;
       return;
     }
 
+    profile.profile_photo_url = freshUrl;
     renderAvatar(freshUrl, profile.full_name);
     alertBox.innerHTML = `<div class="alert alert-success">Profile photo updated.</div>`;
   });
@@ -144,29 +323,63 @@
   document.getElementById('profile-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('save-btn');
-    btn.disabled = true; btn.textContent = 'Saving...';
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
     const alertBox = document.getElementById('alert-box');
 
-    // Only non-sensitive fields — role/status/fee are excluded from this
-    // update entirely, and the DB trigger would reject them anyway.
-    const { error } = await supabase.from('profiles').update({
+    const payload = {
       full_name: document.getElementById('full_name').value.trim(),
       phone: document.getElementById('phone').value.trim() || null,
       profession: document.getElementById('profession').value.trim() || null,
       location: document.getElementById('location').value.trim() || null,
-      graduation_year: document.getElementById('graduation_year').value || null,
-    }).eq('id', profile.id);
+      graduation_year: document.getElementById('graduation_year').value
+        ? Number(document.getElementById('graduation_year').value)
+        : null,
+    };
+
+    if (isAdminMode) {
+      const feePaid = document.getElementById('membership_fee_paid').value === 'true';
+      payload.membership_class = document.getElementById('membership_class').value;
+      payload.status = document.getElementById('status').value;
+      payload.membership_fee_paid = feePaid;
+      if (feePaid && !profile.membership_fee_paid) {
+        payload.membership_fee_paid_at = new Date().toISOString();
+      }
+      if (!feePaid) {
+        payload.membership_fee_paid_at = null;
+      }
+      if (payload.status === 'approved' && profile.status !== 'approved') {
+        const { data: { session } } = await supabase.auth.getSession();
+        payload.approved_at = new Date().toISOString();
+        payload.approved_by = session?.user?.id || null;
+      }
+      // Role: only attempt if viewer is super admin and target is not super admin
+      if (viewerIsSuperAdmin && !profile.is_super_admin) {
+        const roleEl = document.getElementById('role');
+        if (roleEl && roleEl.tagName === 'SELECT') {
+          payload.role = roleEl.value;
+        }
+      }
+    }
+
+    const { error } = await supabase.from('profiles').update(payload).eq('id', targetId);
 
     if (error) {
-      alertBox.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
     } else {
       alertBox.innerHTML = `<div class="alert alert-success">Profile updated.</div>`;
+      // Refresh local copy + readonly summary
+      Object.assign(profile, payload);
+      fillForm(profile);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    btn.disabled = false; btn.textContent = 'Save Changes';
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
   });
 
-  document.getElementById('password-form').addEventListener('submit', async (e) => {
+  document.getElementById('password-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (isAdminMode) return;
     const btn = document.getElementById('pw-btn');
     const alertBox = document.getElementById('pw-alert-box');
     const pw = document.getElementById('new_password').value;
@@ -176,15 +389,17 @@
       alertBox.innerHTML = `<div class="alert alert-error">Passwords do not match.</div>`;
       return;
     }
-    btn.disabled = true; btn.textContent = 'Updating...';
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
     const { error } = await supabase.auth.updateUser({ password: pw });
     if (error) {
-      alertBox.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
     } else {
       alertBox.innerHTML = `<div class="alert alert-success">Password updated.</div>`;
       document.getElementById('password-form').reset();
     }
-    btn.disabled = false; btn.textContent = 'Update Password';
+    btn.disabled = false;
+    btn.textContent = 'Update Password';
   });
 </script>
 </body>
