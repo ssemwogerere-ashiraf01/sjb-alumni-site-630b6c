@@ -61,7 +61,7 @@ export async function loginWithGoogle() {
 
 export async function logout() {
   await supabase.auth.signOut();
-  window.location.href = `${BASE_URL}/login.html`;
+  window.location.href = `${BASE_URL}/index.html`;
 }
 
 // After any successful login, send the person to the right place based on

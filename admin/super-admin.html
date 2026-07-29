@@ -98,7 +98,9 @@
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
       <h3 style="margin:0;">All Members</h3>
       <input type="text" id="member-search" placeholder="Search name or email..." style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:4px; width:240px;" />
+      <button type="button" class="mini-btn good" id="export-members-csv">Export CSV</button>
     </div>
+    <div id="members-pagination" style="display:flex;justify-content:space-between;align-items:center;margin:0.5rem 0 0.75rem;flex-wrap:wrap;gap:0.5rem;"></div>
     <div style="overflow-x:auto;">
       <table>
         <thead>
@@ -106,12 +108,20 @@
             <th>Photo</th>
             <th>Name</th>
             <th>Email</th>
+            <th>Phone</th>
+            <th>Class</th>
+            <th>Status</th>
+            <th>Fee</th>
+            <th>Profession</th>
+            <th>Location</th>
+            <th>Grad year</th>
             <th>Role</th>
-            <th>Change Role To</th>
+            <th>Joined</th>
+            <th>Change Role</th>
             <th>Delete</th>
           </tr>
         </thead>
-        <tbody id="members-tbody"><tr><td colspan="6" class="empty-note">Loading members...</td></tr></tbody>
+        <tbody id="members-tbody"><tr><td colspan="14" class="empty-note">Loading members...</td></tr></tbody>
       </table>
     </div>
     <input type="file" id="sa-photo-file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
@@ -184,7 +194,7 @@
 <div id="app-footer"></div>
 
 <script type="module">
-  import { supabase } from '../assets/js/supabase-client.js';
+  import { supabase, SUPABASE_URL } from '../assets/js/supabase-client.js';
   import { mountNav, mountFooter } from '../assets/js/nav.js';
   import { requireSuperAdmin } from '../assets/js/admin-guard.js';
   import '../assets/js/session-guard.js';
@@ -231,6 +241,18 @@
   });
 
   const alertBox = document.getElementById('alert-box');
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  }
+
   function flash(msg, type = 'success') {
     alertBox.innerHTML = `<div class="alert alert-${type}">${escapeHtml(msg)}</div>`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -238,6 +260,8 @@
   }
 
   let allMembers = [];
+  let memberPage = 1;
+  const MEMBERS_PER_PAGE = 25;
   let profileById = {};
   let savingsGroups = [];
   let elections = [];
@@ -275,7 +299,29 @@
     safeLoad('Feedback summary', loadFeedbackSummary),
   ]);
 
-  document.getElementById('member-search').addEventListener('input', debounce(renderMembers, 250));
+  document.getElementById('member-search').addEventListener('input', debounce(() => { memberPage = 1; renderMembers(); }, 250));
+  document.getElementById('export-members-csv')?.addEventListener('click', () => {
+    const q = document.getElementById('member-search').value.trim().toLowerCase();
+    const rows = allMembers.filter(m =>
+      !q || m.full_name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q)
+      || m.phone?.toLowerCase().includes(q) || m.profession?.toLowerCase().includes(q)
+      || m.location?.toLowerCase().includes(q)
+    );
+    const cols = ['full_name','email','phone','membership_class','status','membership_fee_paid','profession','location','graduation_year','role','is_super_admin','created_at','approved_at'];
+    const header = cols.join(',');
+    const lines = rows.map(m => cols.map(c => {
+      let v = m[c];
+      if (v == null) v = '';
+      v = String(v).replace(/"/g, '""');
+      return `"${v}"`;
+    }).join(','));
+    const blob = new Blob([[header, ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `sjb-members-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
 
   async function loadStats() {
     const { data } = await supabase.from('profiles').select('role, is_super_admin');
@@ -307,15 +353,14 @@
   async function loadMembers() {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, email, role, is_super_admin, profile_photo_url')
+      .select('id, full_name, email, phone, graduation_year, profession, location, membership_class, status, membership_fee_paid, membership_fee_paid_at, role, is_super_admin, profile_photo_url, onboarding_completed, created_at, approved_at, locked_until')
       .order('full_name', { ascending: true });
 
     if (error) {
-      document.getElementById('members-tbody').innerHTML = `<tr><td colspan="6" class="empty-note">Could not load members: ${escapeHtml(error.message)}</td></tr>`;
+      document.getElementById('members-tbody').innerHTML = `<tr><td colspan="14" class="empty-note">Could not load members: ${escapeHtml(error.message)}</td></tr>`;
       return;
     }
     allMembers = data || [];
-    // Keep the shared profile map in sync for other tabs.
     (allMembers || []).forEach(m => {
       profileById[m.id] = { id: m.id, full_name: m.full_name, email: m.email };
     });
@@ -324,17 +369,46 @@
 
   function renderMembers() {
     const q = document.getElementById('member-search').value.trim().toLowerCase();
-    const rows = allMembers.filter(m =>
-      !q || m.full_name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q)
+    const filtered = allMembers.filter(m =>
+      !q
+      || m.full_name?.toLowerCase().includes(q)
+      || m.email?.toLowerCase().includes(q)
+      || m.phone?.toLowerCase().includes(q)
+      || m.profession?.toLowerCase().includes(q)
+      || m.location?.toLowerCase().includes(q)
     );
 
+    const totalPages = Math.max(1, Math.ceil(filtered.length / MEMBERS_PER_PAGE));
+    if (memberPage > totalPages) memberPage = totalPages;
+    if (memberPage < 1) memberPage = 1;
+    const startIdx = (memberPage - 1) * MEMBERS_PER_PAGE;
+    const rows = filtered.slice(startIdx, startIdx + MEMBERS_PER_PAGE);
+
     const tbody = document.getElementById('members-tbody');
+    const pager = document.getElementById('members-pagination');
+    if (pager) {
+      pager.innerHTML = `
+        <span class="empty-note">${filtered.length} member(s) · page ${memberPage} of ${totalPages}</span>
+        <span style="display:flex;gap:0.35rem;">
+          <button type="button" class="mini-btn neutral" id="mem-prev" ${memberPage <= 1 ? 'disabled' : ''}>Prev</button>
+          <button type="button" class="mini-btn neutral" id="mem-next" ${memberPage >= totalPages ? 'disabled' : ''}>Next</button>
+        </span>`;
+      document.getElementById('mem-prev')?.addEventListener('click', () => { memberPage -= 1; renderMembers(); });
+      document.getElementById('mem-next')?.addEventListener('click', () => { memberPage += 1; renderMembers(); });
+    }
+
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="empty-note">No members match that search.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="14" class="empty-note">No members match that search.</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = rows.map(m => `
+    tbody.innerHTML = rows.map(m => {
+      const fee = m.membership_fee_paid
+        ? `✓ Paid${m.membership_fee_paid_at ? '<div class="empty-note" style="font-size:0.72rem;">' + new Date(m.membership_fee_paid_at).toLocaleDateString() + '</div>' : ''}`
+        : '— Unpaid';
+      const cls = m.membership_class === 'alumni' ? 'Alumni' : (m.membership_class === 'non_alumni' ? 'Non-Alumni' : (m.membership_class || '—'));
+      const editHref = `../profile.html?admin_view=${m.id}`;
+      return `
       <tr data-id="${m.id}">
         <td>
           <div class="photo-cell">
@@ -342,12 +416,27 @@
             <button type="button" class="mini-btn neutral" data-set-photo="${m.id}" data-member-name="${escapeHtml(m.full_name)}">${m.profile_photo_url ? 'Change' : 'Set'}</button>
           </div>
         </td>
-        <td>${escapeHtml(m.full_name)}</td>
+        <td>
+          <strong>${escapeHtml(m.full_name)}</strong>
+          ${m.locked_until && new Date(m.locked_until) > new Date() ? '<div style="color:#9c2b2b;font-size:0.72rem;">🔒 locked</div>' : ''}
+          ${m.onboarding_completed === false ? '<div class="empty-note" style="font-size:0.72rem;">Onboarding incomplete</div>' : ''}
+          <div><a href="${editHref}" class="empty-note" style="font-size:0.75rem;">View / edit profile</a></div>
+        </td>
         <td>${escapeHtml(m.email)}</td>
+        <td>${escapeHtml(m.phone || '—')}</td>
+        <td>${escapeHtml(cls)}</td>
+        <td><span class="pill pill-${escapeHtml(m.status || 'pending')}">${escapeHtml(m.status || '—')}</span></td>
+        <td>${fee}</td>
+        <td>${escapeHtml(m.profession || '—')}</td>
+        <td>${escapeHtml(m.location || '—')}</td>
+        <td>${m.graduation_year ?? '—'}</td>
         <td>
           ${m.is_super_admin
             ? '<span class="pill pill-super">Super Admin</span>'
-            : `<span class="pill pill-${m.role}">${escapeHtml(m.role)}</span>`}
+            : `<span class="pill pill-${escapeHtml(m.role)}">${escapeHtml(m.role)}</span>`}
+        </td>
+        <td>${m.created_at ? new Date(m.created_at).toLocaleDateString() : '—'}
+          ${m.approved_at ? `<div class="empty-note" style="font-size:0.72rem;">Approved ${new Date(m.approved_at).toLocaleDateString()}</div>` : ''}
         </td>
         <td>
           ${m.is_super_admin ? '<span class="empty-note">—</span>' : `
@@ -366,149 +455,85 @@
             <button type="button" class="mini-btn bad" data-delete-member="${m.id}" data-member-email="${escapeHtml(m.email)}" data-member-name="${escapeHtml(m.full_name)}">Delete</button>
           `}
         </td>
-      </tr>
-    `).join('');
-
-    tbody.querySelectorAll('button[data-apply-role]').forEach(btn => {
-      btn.addEventListener('click', () => updateRole(btn.dataset.applyRole));
-    });
-    tbody.querySelectorAll('button[data-delete-member]').forEach(btn => {
-      btn.addEventListener('click', () => deleteMemberPermanently(
-        btn.dataset.deleteMember,
-        btn.dataset.memberEmail,
-        btn.dataset.memberName
-      ));
-    });
-    tbody.querySelectorAll('button[data-set-photo]').forEach(btn => {
-      btn.addEventListener('click', () => openPhotoPicker(btn.dataset.setPhoto, btn.dataset.memberName));
-    });
+      </tr>`;
+    }).join('');
   }
 
-  let pendingPhotoUserId = null;
-
-  function openPhotoPicker(userId, memberName) {
-    pendingPhotoUserId = userId;
-    const input = document.getElementById('sa-photo-file');
-    input.value = '';
-    input.click();
-  }
-
-  document.getElementById('sa-photo-file')?.addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    const userId = pendingPhotoUserId;
-    pendingPhotoUserId = null;
-    if (!file || !userId) return;
-
-    if (!file.type.startsWith('image/')) {
-      flash('Please choose an image file (JPG, PNG, WEBP, or GIF).', 'error');
+  // ---- Member photo / role / delete (event delegation) ----
+  let pendingPhotoMemberId = null;
+  document.addEventListener('click', async (event) => {
+    const photoBtn = event.target.closest('[data-set-photo]');
+    if (photoBtn) {
+      pendingPhotoMemberId = photoBtn.dataset.setPhoto;
+      document.getElementById('sa-photo-file')?.click();
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      flash('Image must be 10MB or smaller.', 'error');
-      return;
-    }
-
-    const member = allMembers.find(m => m.id === userId);
-    flash(`Uploading photo for ${member?.full_name || 'member'}...`);
-
-    try {
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-      // Same folder convention as profile.html: avatars/<user_id>/photo.<ext>
-      const path = `${userId}/photo.${ext}`;
-
-      const { error: uploadErr } = await supabase.storage
-        .from('avatars')
-        .upload(path, file, { upsert: true, cacheControl: '3600', contentType: file.type || undefined });
-      if (uploadErr) throw uploadErr;
-
-      const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
-      const freshUrl = `${pub.publicUrl}?t=${Date.now()}`;
-
-      const { error: dbErr } = await supabase
-        .from('profiles')
-        .update({ profile_photo_url: freshUrl })
-        .eq('id', userId);
-      if (dbErr) throw dbErr;
-
-      flash(`Photo updated for ${member?.full_name || 'member'}.`);
+    const roleBtn = event.target.closest('[data-apply-role]');
+    if (roleBtn) {
+      const id = roleBtn.dataset.applyRole;
+      const select = document.querySelector(`select[data-role-select="${id}"]`);
+      const newRole = select?.value;
+      const member = allMembers.find(m => m.id === id);
+      if (!newRole || !member) return;
+      if (newRole === member.role) return flash('Role is already set to that value.');
+      if (newRole === 'admin' && !confirm(`Grant admin privileges to ${member.full_name}?`)) return;
+      if (member.role === 'admin' && newRole !== 'admin' && !confirm(`Remove admin privileges from ${member.full_name}?`)) return;
+      const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', id);
+      if (error) return flash(error.message, 'error');
+      flash(`${member.full_name}'s role is now "${newRole}".`);
       await loadMembers();
-    } catch (err) {
-      const msg = err?.message || String(err);
-      const hint = /row-level security|policy|not allowed|unauthorized/i.test(msg)
-        ? ' Run sql/016_avatar_admin_upload.sql in Supabase so the super admin can write into other members\' avatar folders.'
-        : '';
-      flash(`Photo upload failed: ${msg}${hint}`, 'error');
+      await loadStats();
+      return;
+    }
+    const delBtn = event.target.closest('[data-delete-member]');
+    if (delBtn) {
+      const id = delBtn.dataset.deleteMember;
+      const name = delBtn.dataset.memberName || 'this member';
+      const email = delBtn.dataset.memberEmail || '';
+      if (!confirm(`Permanently delete ${name} (${email})? This cannot be undone.`)) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-delete-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ userId: id }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return flash(body.error || 'Delete failed.', 'error');
+      flash(`${name} deleted.`);
+      await loadMembers();
+      await loadStats();
     }
   });
 
-  async function updateRole(id) {
-    const select = document.querySelector(`select[data-role-select="${id}"]`);
-    const newRole = select.value;
-    const member = allMembers.find(m => m.id === id);
-
-    if (newRole === 'admin' && !confirm(`Grant admin privileges to ${member?.full_name}?`)) return;
-    if (member?.role === 'admin' && newRole !== 'admin' && !confirm(`Remove admin privileges from ${member?.full_name}?`)) return;
-
-    const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', id);
-    if (error) { flash(error.message, 'error'); return; }
-    flash(`${member?.full_name}'s role is now "${newRole}".`);
-    await loadStats();
-    await loadMembers();
-  }
-
-  async function deleteMemberPermanently(id, email, fullName) {
-    // Deliberately heavier friction than a role change: this permanently
-    // erases the auth account, the profile, and every record that belongs
-    // solely to them (votes cast, candidacies, savings memberships,
-    // feedback responses). Content they merely authored (news, forum
-    // posts, events, etc.) stays, just with the "posted by" credit
-    // cleared. There is no undo.
-    const typed = prompt(
-      `This will PERMANENTLY delete ${fullName} (${email}) and cannot be undone.\n\n` +
-      `Type their email address to confirm:`
-    );
-    if (typed === null) return;
-    if (typed.trim().toLowerCase() !== email.trim().toLowerCase()) {
-      flash('Email did not match — deletion cancelled.', 'error');
-      return;
+  document.getElementById('sa-photo-file')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !pendingPhotoMemberId) return;
+    const member = allMembers.find(m => m.id === pendingPhotoMemberId);
+    const memberId = pendingPhotoMemberId;
+    pendingPhotoMemberId = null;
+    flash(`Uploading photo for ${member?.full_name || 'member'}…`);
+    try {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const path = `${memberId}/avatar.${ext}`;
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+      const url = `${pub.publicUrl}?t=${Date.now()}`;
+      const { error: profErr } = await supabase.from('profiles').update({ profile_photo_url: url }).eq('id', memberId);
+      if (profErr) throw profErr;
+      flash(`Photo updated for ${member?.full_name || 'member'}.`);
+      await loadMembers();
+    } catch (err) {
+      flash(err.message || String(err), 'error');
     }
-
-    const { data, error } = await supabase.functions.invoke('admin-delete-user', {
-      body: { userId: id },
-    });
-
-    if (error) {
-      flash(`Could not delete user: ${error.message || 'Unknown error'}`, 'error');
-      return;
-    }
-    if (data?.error) {
-      flash(`Could not delete user: ${data.error}`, 'error');
-      return;
-    }
-
-    flash(`${fullName} has been permanently deleted.`);
-    await loadStats();
-    await loadMembers();
-  }
-
-  function debounce(fn, ms) {
-    let t;
-    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
-  }
-
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str ?? '';
-    return div.innerHTML;
-  }
+  });
 
   // =====================================================================
   // Shared: resolve profile names without nested embeds.
-  // Tables like savings_group_members / savings_transactions / candidates
-  // have more than one FK to profiles (user_id + approved_by), so
-  // `profiles(full_name)` embeds often fail with "more than one
-  // relationship". We load profiles once and join client-side instead.
-  // (profileById is declared near the top of this script.)
   // =====================================================================
   async function ensureProfileMap(ids = []) {
     const missing = [...new Set(ids.filter(Boolean).filter(id => !profileById[id]))];

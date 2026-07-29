@@ -169,11 +169,13 @@
             <option value="suspended">Suspended</option>
             <option value="rejected">Rejected</option>
           </select>
+          <button type="button" class="mini-btn good" id="export-admin-members-csv">Export CSV</button>
         </div>
+        <div id="admin-members-pagination" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 0.75rem;flex-wrap:wrap;gap:0.5rem;"></div>
         <div style="overflow-x:auto;">
           <table class="admin-table">
             <thead>
-              <tr><th>Photo</th><th>Name</th><th>Email</th><th>Class</th><th>Status</th><th>Fee</th><th>Role</th><th>Joined</th><th>Actions</th></tr>
+              <tr><th>Photo</th><th>Name</th><th>Email</th><th>Phone</th><th>Class</th><th>Status</th><th>Fee</th><th>Profession</th><th>Location</th><th>Grad year</th><th>Role</th><th>Joined</th><th>Actions</th></tr>
             </thead>
             <tbody id="members-tbody"></tbody>
           </table>
@@ -454,31 +456,66 @@
     }
 
     // ---------- Members tab ----------
+    let adminMemberPage = 1;
+    const ADMIN_MEMBERS_PER_PAGE = 25;
+    let adminMembersCache = [];
+
     async function loadMembers() {
       const search = document.getElementById('member-search').value.trim();
       const status = document.getElementById('status-filter').value;
 
       let query = supabase.from('profiles').select('*').order('created_at', { ascending: false });
       if (status) query = query.eq('status', status);
-      if (search) query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+      if (search) query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%,profession.ilike.%${search}%,location.ilike.%${search}%`);
 
       const { data: members, error } = await query;
       if (error) { flash(error.message, 'error'); return; }
 
+      adminMembersCache = members || [];
+      const totalPages = Math.max(1, Math.ceil(adminMembersCache.length / ADMIN_MEMBERS_PER_PAGE));
+      if (adminMemberPage > totalPages) adminMemberPage = totalPages;
+      const startIdx = (adminMemberPage - 1) * ADMIN_MEMBERS_PER_PAGE;
+      const pageRows = adminMembersCache.slice(startIdx, startIdx + ADMIN_MEMBERS_PER_PAGE);
+
+      const pager = document.getElementById('admin-members-pagination');
+      if (pager) {
+        pager.innerHTML = `
+          <span style="color:var(--text-muted);font-size:0.85rem;">${adminMembersCache.length} member(s) · page ${adminMemberPage} of ${totalPages}</span>
+          <span style="display:flex;gap:0.35rem;">
+            <button type="button" class="mini-btn neutral" id="admin-mem-prev" ${adminMemberPage <= 1 ? 'disabled' : ''}>Prev</button>
+            <button type="button" class="mini-btn neutral" id="admin-mem-next" ${adminMemberPage >= totalPages ? 'disabled' : ''}>Next</button>
+          </span>`;
+        document.getElementById('admin-mem-prev')?.addEventListener('click', () => { adminMemberPage -= 1; loadMembers(); });
+        document.getElementById('admin-mem-next')?.addEventListener('click', () => { adminMemberPage += 1; loadMembers(); });
+      }
+
       const tbody = document.getElementById('members-tbody');
-      tbody.innerHTML = members.map(m => `
+      tbody.innerHTML = pageRows.map(m => {
+        const feeLabel = m.membership_fee_paid
+          ? `✓ Paid${m.membership_fee_paid_at ? '<div class="empty-note" style="font-size:0.72rem;">' + new Date(m.membership_fee_paid_at).toLocaleDateString() + '</div>' : ''}`
+          : '— Unpaid';
+        const cls = m.membership_class === 'alumni' ? 'Alumni' : (m.membership_class === 'non_alumni' ? 'Non-Alumni' : (m.membership_class || '—'));
+        return `
         <tr data-id="${m.id}">
           <td>${memberAvatarHtml(m)}</td>
           <td>
-            <a href="#" class="view-toggle" data-id="${m.id}" style="font-weight:600;">${escapeHtml(m.full_name)}</a>
+            <strong>${escapeHtml(m.full_name)}</strong>
             ${m.locked_until && new Date(m.locked_until) > new Date() ? '<div style="color:#9c2b2b;font-size:0.72rem;">🔒 locked</div>' : ''}
+            ${m.onboarding_completed === false ? '<div style="font-size:0.72rem;color:#a16207;">Onboarding incomplete</div>' : ''}
+            <div><a href="../profile.html?admin_view=${m.id}" style="font-size:0.75rem;color:var(--brand-green,#1f4b3f);">View / edit profile</a></div>
           </td>
           <td>${escapeHtml(m.email)}</td>
-          <td>${m.membership_class === 'alumni' ? 'Alumni' : 'Non-Alumni'}</td>
-          <td><span class="pill pill-${m.status}">${m.status}</span></td>
-          <td>${m.membership_fee_paid ? '✓ Paid' : '— Unpaid'}</td>
-          <td>${m.role === 'admin' ? '<strong>Admin</strong>' : m.role}</td>
-          <td>${new Date(m.created_at).toLocaleDateString()}</td>
+          <td>${escapeHtml(m.phone || '—')}</td>
+          <td>${escapeHtml(cls)}</td>
+          <td><span class="pill pill-${m.status}">${escapeHtml(m.status)}</span></td>
+          <td>${feeLabel}</td>
+          <td>${escapeHtml(m.profession || '—')}</td>
+          <td>${escapeHtml(m.location || '—')}</td>
+          <td>${m.graduation_year ?? '—'}</td>
+          <td>${m.is_super_admin ? '<strong>Super Admin</strong>' : (m.role === 'admin' ? '<strong>Admin</strong>' : escapeHtml(m.role || 'member'))}</td>
+          <td>${m.created_at ? new Date(m.created_at).toLocaleDateString() : '—'}
+            ${m.approved_at ? `<div class="empty-note" style="font-size:0.72rem;">Approved ${new Date(m.approved_at).toLocaleDateString()}</div>` : ''}
+          </td>
           <td>
             ${actionSelectHtml('member', m.id, [
               ...(m.status === 'pending' ? [{ value: 'approve', label: 'Approve' }, { value: 'reject', label: 'Reject' }] : []),
@@ -488,8 +525,8 @@
               ...(m.locked_until ? [{ value: 'unlock', label: 'Unlock' }] : []),
             ])}
           </td>
-        </tr>
-      `).join('');
+        </tr>`;
+      }).join('');
 
     }
 
@@ -518,8 +555,30 @@
       return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
     }
 
-    document.getElementById('member-search').addEventListener('input', debounce(loadMembers, 350));
-    document.getElementById('status-filter').addEventListener('change', loadMembers);
+        document.getElementById('status-filter').addEventListener('change', () => { adminMemberPage = 1; loadMembers(); });
+    document.getElementById('export-admin-members-csv')?.addEventListener('click', async () => {
+      // Export current filter set (reload full filtered list)
+      const search = document.getElementById('member-search').value.trim();
+      const status = document.getElementById('status-filter').value;
+      let query = supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (status) query = query.eq('status', status);
+      if (search) query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+      const { data: rows, error } = await query;
+      if (error) return flash(error.message, 'error');
+      const cols = ['full_name','email','phone','membership_class','status','membership_fee_paid','profession','location','graduation_year','role','created_at','approved_at'];
+      const header = cols.join(',');
+      const lines = (rows || []).map(m => cols.map(c => {
+        let v = m[c]; if (v == null) v = '';
+        return '"' + String(v).replace(/"/g, '""') + '"';
+      }).join(','));
+      const blob = new Blob([[header, ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `sjb-members-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+    document.getElementById('member-search').addEventListener('input', debounce(() => { adminMemberPage = 1; loadMembers(); }, 350));
 
     // First visit: if anyone is awaiting approval, land the admin on that list.
     (async () => {
@@ -914,16 +973,29 @@
     // and managing candidates are all Super Admin Dashboard actions now.
     async function loadSavingsGroups() {
       const { data: groups } = await supabase.from('savings_groups').select('*').order('created_at', { ascending: false });
-      document.getElementById('savings-groups-tbody').innerHTML = (groups || []).map(g => `
+      const memberCountByGroup = {};
+      if (groups?.length) {
+        const { data: memberships } = await supabase
+          .from('savings_group_members')
+          .select('group_id, status')
+          .eq('status', 'active');
+        (memberships || []).forEach(m => {
+          memberCountByGroup[m.group_id] = (memberCountByGroup[m.group_id] || 0) + 1;
+        });
+      }
+      document.getElementById('savings-groups-tbody').innerHTML = (groups || []).map(g => {
+        const active = memberCountByGroup[g.id] || 0;
+        const max = g.max_members ?? '—';
+        return `
         <tr>
           <td><strong>${escapeHtml(g.name)}</strong></td>
           <td>${g.currency || 'UGX'} ${Number(g.monthly_contribution).toLocaleString()}</td>
           <td>${g.currency || 'UGX'} ${Number(g.group_join_fee).toLocaleString()}</td>
-          <td>0 / ${g.max_members}</td>
+          <td>${active} / ${max}</td>
           <td><span class="pill ${g.is_active ? 'pill-active' : 'pill-rejected'}">${g.is_active ? 'active' : 'inactive'}</span></td>
           <td><span style="color:var(--text-muted); font-size:0.8rem;">Managed by Super Admin</span></td>
-        </tr>
-      `).join('') || `<tr><td colspan="6" style="text-align:center;">No savings groups found.</td></tr>`;
+        </tr>`;
+      }).join('') || `<tr><td colspan="6" style="text-align:center;">No savings groups found.</td></tr>`;
     }
 
     document.getElementById('new-group-btn').addEventListener('click', () => {
