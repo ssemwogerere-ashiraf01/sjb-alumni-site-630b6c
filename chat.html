@@ -2,20 +2,34 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <title>Member Chat — SJB Association</title>
 <link rel="stylesheet" href="assets/css/style.css" />
 <style>
-  .chat-wrap { max-width: 1100px; margin: 0 auto; padding: 1rem; display: grid; grid-template-columns: 300px 1fr; gap: 1rem; min-height: 72vh; }
-  @media (max-width: 800px) { .chat-wrap { grid-template-columns: 1fr; } }
-  .chat-side, .chat-main {
+  .chat-page { max-width: 1100px; margin: 0 auto; padding: 0.5rem; min-height: 70vh; }
+  .chat-wrap {
+    display: grid; grid-template-columns: 300px 1fr; gap: 0; min-height: 72vh;
     background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius);
-    box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; max-height: 75vh;
+    overflow: hidden; box-shadow: var(--shadow);
   }
-  .chat-side h3, .chat-main-head { margin: 0; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); font-size: 1rem; display:flex; align-items:center; gap:0.5rem; justify-content:space-between; }
+  @media (max-width: 800px) {
+    .chat-wrap { grid-template-columns: 1fr; min-height: calc(100vh - 140px); border-radius: 0; border-left: none; border-right: none; }
+    .chat-wrap.show-thread .chat-side { display: none; }
+    .chat-wrap:not(.show-thread) .chat-main { display: none; }
+    .chat-wrap.show-thread .chat-main { display: flex; }
+  }
+  .chat-side, .chat-main { display: flex; flex-direction: column; overflow: hidden; max-height: 75vh; }
+  @media (max-width: 800px) { .chat-side, .chat-main { max-height: calc(100vh - 140px); } }
+  .chat-side { border-right: 1px solid var(--border); background: var(--paper); }
+  .chat-side h3, .chat-main-head {
+    margin: 0; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);
+    font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;
+  }
+  .back-chat { display: none; border: none; background: transparent; font-size: 1.25rem; cursor: pointer; color: var(--text); }
+  @media (max-width: 800px) { .back-chat { display: inline-flex; } }
   .member-list { overflow-y: auto; flex: 1; }
   .member-item {
-    display: flex; align-items: center; gap: 0.65rem; width: 100%; text-align: left; padding: 0.6rem 0.85rem;
+    display: flex; align-items: center; gap: 0.65rem; width: 100%; text-align: left; padding: 0.65rem 0.85rem;
     border: none; background: none; cursor: pointer; font-family: inherit; color: var(--text);
     border-bottom: 1px solid var(--border);
   }
@@ -29,77 +43,172 @@
     align-items: center; justify-content: center; padding: 0 0.35rem;
   }
   .member-avatar {
-    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
     background: var(--gold); color: #16233a; display: flex; align-items: center; justify-content: center;
     font-weight: 700; font-size: 0.85rem;
   }
   .member-avatar img { width: 100%; height: 100%; object-fit: cover; }
-  .messages { flex: 1; overflow-y: auto; padding: 1rem; background: var(--parchment); }
-  .bubble-wrap { margin: 0.45rem 0; max-width: 78%; }
+  .messages {
+    flex: 1; overflow-y: auto; padding: 1rem; background: var(--chat-bg, var(--parchment));
+    background-size: cover; background-position: center;
+  }
+  .bubble-wrap { margin: 0.45rem 0; max-width: 78%; clear: both; }
   .bubble-wrap.mine { margin-left: auto; }
   .bubble-sender { font-size: 0.72rem; font-weight: 700; color: var(--forest); margin: 0 0 0.15rem 0.25rem; }
-  .bubble { padding: 0.5rem 0.7rem; border-radius: 12px; font-size: 0.9rem; background: var(--paper); border: 1px solid var(--border); position: relative; }
+  .bubble {
+    padding: 0.5rem 0.7rem; border-radius: 12px; font-size: 0.9rem;
+    background: var(--paper); border: 1px solid var(--border); position: relative; word-break: break-word;
+  }
   .bubble-wrap.mine .bubble { background: var(--forest); color: #fff; border-color: transparent; }
   .bubble .when { display: block; font-size: 0.68rem; opacity: 0.75; margin-top: 0.2rem; }
-  .bubble .reply-quote { font-size: 0.78rem; opacity: 0.9; border-left: 3px solid var(--gold); padding: 0.25rem 0.45rem; margin-bottom: 0.35rem; background: rgba(0,0,0,0.06); border-radius: 4px; }
+  .bubble .edited { font-size: 0.65rem; opacity: 0.7; font-style: italic; }
+  .bubble .reply-quote {
+    font-size: 0.78rem; opacity: 0.9; border-left: 3px solid var(--gold);
+    padding: 0.25rem 0.45rem; margin-bottom: 0.35rem; background: rgba(0,0,0,0.06); border-radius: 4px;
+  }
   .bubble-wrap.mine .reply-quote { background: rgba(255,255,255,0.12); }
   .reactions { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.25rem; }
-  .reaction-chip { font-size: 0.75rem; background: var(--paper); border: 1px solid var(--border); border-radius: 999px; padding: 0.1rem 0.4rem; cursor: pointer; }
-  .bubble-actions { display: none; gap: 0.35rem; margin-top: 0.25rem; }
-  .bubble-wrap:hover .bubble-actions { display: flex; }
-  .bubble-actions button { font-size: 0.7rem; border: none; background: transparent; color: var(--text-muted); cursor: pointer; }
-  .composer { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.65rem; border-top: 1px solid var(--border); align-items: center; }
-  .composer input[type="text"] { flex: 1; min-width: 120px; padding: 0.5rem 0.65rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--paper); color: var(--text); }
-  .composer .icon-btn { border: 1px solid var(--border); background: var(--paper); border-radius: 8px; padding: 0.4rem 0.55rem; cursor: pointer; color: var(--text); }
-  .reply-bar { width: 100%; font-size: 0.8rem; background: var(--parchment); padding: 0.35rem 0.5rem; border-radius: 6px; display: flex; justify-content: space-between; }
+  .reaction-chip {
+    font-size: 0.75rem; background: var(--paper); border: 1px solid var(--border);
+    border-radius: 999px; padding: 0.1rem 0.4rem; cursor: pointer;
+  }
+  .bubble-actions { display: none; gap: 0.35rem; margin-top: 0.25rem; flex-wrap: wrap; }
+  .bubble-wrap:hover .bubble-actions, .bubble-wrap:focus-within .bubble-actions { display: flex; }
+  .bubble-actions button {
+    font-size: 0.7rem; border: none; background: transparent; color: var(--text-muted); cursor: pointer;
+  }
+  .composer {
+    display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.65rem; border-top: 1px solid var(--border);
+    align-items: center; background: var(--paper);
+  }
+  .composer input[type="text"] {
+    flex: 1; min-width: 100px; padding: 0.5rem 0.65rem; border: 1px solid var(--border);
+    border-radius: var(--radius); background: var(--paper); color: var(--text);
+  }
+  .composer .icon-btn {
+    border: 1px solid var(--border); background: var(--paper); border-radius: 8px;
+    padding: 0.4rem 0.55rem; cursor: pointer; color: var(--text); font-size: 1rem;
+  }
+  .reply-bar, .edit-bar {
+    width: 100%; font-size: 0.8rem; background: var(--parchment); padding: 0.35rem 0.5rem;
+    border-radius: 6px; display: flex; justify-content: space-between; align-items: center;
+  }
   .side-actions { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); display: flex; gap: 0.4rem; flex-wrap: wrap; }
   .side-actions button { font-size: 0.78rem; }
-  .call-bar { display:none; padding:0.5rem 1rem; background:#123128; color:#fff; align-items:center; gap:0.75rem; }
-  .call-bar.active { display:flex; }
-  #local-video, #remote-video { width: 120px; height: 90px; background:#000; border-radius:8px; object-fit:cover; }
-  .media-preview img, .media-preview video { max-width: 220px; border-radius: 8px; display:block; }
-  .media-preview audio { width: 200px; }
+  .call-bar {
+    display: none; padding: 0.5rem 1rem; background: #123128; color: #fff;
+    align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  }
+  .call-bar.active { display: flex; }
+  #local-video, #remote-video { width: 100px; height: 75px; background: #000; border-radius: 8px; object-fit: cover; }
+  .media-preview img, .media-preview video { max-width: 220px; border-radius: 8px; display: block; }
+  .media-preview audio { width: min(220px, 100%); }
+  .incoming-call-modal {
+    display: none; position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.55);
+    align-items: center; justify-content: center; padding: 1rem;
+  }
+  .incoming-call-modal.show { display: flex; }
+  .incoming-call-card {
+    background: var(--paper); color: var(--text); border-radius: 12px; padding: 1.5rem;
+    max-width: 320px; width: 100%; text-align: center; box-shadow: var(--shadow);
+  }
+  .emoji-panel, .sticker-panel {
+    display: none; width: 100%; max-height: 160px; overflow-y: auto; padding: 0.5rem;
+    border-top: 1px solid var(--border); background: var(--parchment); flex-wrap: wrap; gap: 0.25rem;
+  }
+  .emoji-panel.open, .sticker-panel.open { display: flex; }
+  .emoji-panel button, .sticker-panel button {
+    border: none; background: transparent; font-size: 1.35rem; cursor: pointer; padding: 0.2rem;
+  }
+  .sticker-panel button { font-size: 1.75rem; }
+  .theme-panel {
+    display: none; padding: 0.5rem; border-bottom: 1px solid var(--border); gap: 0.4rem; flex-wrap: wrap;
+  }
+  .theme-panel.open { display: flex; }
+  .theme-swatch {
+    width: 36px; height: 36px; border-radius: 8px; border: 2px solid var(--border); cursor: pointer;
+  }
+  .invite-banner {
+    padding: 0.5rem 0.75rem; background: rgba(201,162,39,0.2); font-size: 0.85rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .group-settings { padding: 0.75rem 1rem; font-size: 0.85rem; border-bottom: 1px solid var(--border); display: none; }
+  .group-settings.open { display: block; }
 </style>
 </head>
 <body>
 <div id="app-nav"></div>
-<div class="chat-wrap">
-  <aside class="chat-side">
-    <h3><span>Chats</span></h3>
-    <div class="side-actions">
-      <button type="button" class="btn btn-primary" id="btn-new-group" style="font-size:0.8rem;padding:0.35rem 0.6rem;">+ Group</button>
+<div class="chat-page">
+  <div class="chat-wrap" id="chat-wrap">
+    <aside class="chat-side" id="chat-side">
+      <h3><span>Chats</span></h3>
+      <div class="side-actions">
+        <button type="button" class="btn btn-primary" id="btn-new-group" style="font-size:0.8rem;padding:0.35rem 0.6rem;">+ Group</button>
+        <button type="button" class="btn btn-outline" id="btn-theme" style="font-size:0.8rem;padding:0.35rem 0.6rem;">Theme</button>
+      </div>
+      <div class="theme-panel" id="theme-panel">
+        <button type="button" class="theme-swatch" data-bg="#f7f4ec" style="background:#f7f4ec" title="Parchment"></button>
+        <button type="button" class="theme-swatch" data-bg="#e8f5e9" style="background:#e8f5e9" title="Green"></button>
+        <button type="button" class="theme-swatch" data-bg="#e3f2fd" style="background:#e3f2fd" title="Blue"></button>
+        <button type="button" class="theme-swatch" data-bg="#fce4ec" style="background:#fce4ec" title="Rose"></button>
+        <button type="button" class="theme-swatch" data-bg="#1a2332" style="background:#1a2332" title="Dark"></button>
+        <label class="icon-btn" style="display:inline-flex;align-items:center;cursor:pointer;">📷
+          <input type="file" id="bg-file" accept="image/*" hidden />
+        </label>
+      </div>
+      <div id="invites-box"></div>
+      <button type="button" class="member-item" id="family-room-btn">
+        <span class="member-avatar">🏠</span>
+        <span class="info"><strong>Family room</strong><div class="meta">Everyone</div></span>
+        <span class="unread-badge" id="unread-family" hidden>0</span>
+      </button>
+      <div class="member-list" id="member-list">Loading…</div>
+    </aside>
+    <section class="chat-main" id="chat-main">
+      <div class="chat-main-head">
+        <span style="display:flex;align-items:center;gap:0.5rem;min-width:0;">
+          <button type="button" class="back-chat" id="back-chat" aria-label="Back">←</button>
+          <span id="chat-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Select a chat</span>
+        </span>
+        <span style="display:flex;gap:0.35rem;flex-shrink:0;">
+          <button type="button" class="icon-btn" id="btn-group-settings" title="Group settings" hidden>⚙️</button>
+          <button type="button" class="icon-btn" id="btn-audio-call" title="Audio call" hidden>📞</button>
+          <button type="button" class="icon-btn" id="btn-video-call" title="Video call" hidden>📹</button>
+        </span>
+      </div>
+      <div class="group-settings" id="group-settings"></div>
+      <div class="call-bar" id="call-bar">
+        <video id="local-video" muted playsinline></video>
+        <video id="remote-video" playsinline></video>
+        <span id="call-status">Calling…</span>
+        <button type="button" class="btn" id="btn-end-call" style="background:#c0392b;color:#fff;">End</button>
+      </div>
+      <div class="messages" id="messages"></div>
+      <div class="emoji-panel" id="emoji-panel"></div>
+      <div class="sticker-panel" id="sticker-panel"></div>
+      <form class="composer" id="composer">
+        <div class="reply-bar" id="reply-bar" hidden><span id="reply-text"></span><button type="button" id="reply-cancel">✕</button></div>
+        <div class="edit-bar" id="edit-bar" hidden><span id="edit-text">Editing message</span><button type="button" id="edit-cancel">✕</button></div>
+        <button type="button" class="icon-btn" id="btn-emoji" title="Emoji">😊</button>
+        <button type="button" class="icon-btn" id="btn-sticker" title="Stickers">🎭</button>
+        <button type="button" class="icon-btn" id="btn-attach" title="Attach">📎</button>
+        <button type="button" class="icon-btn" id="btn-voice" title="Voice note">🎤</button>
+        <input type="file" id="file-input" accept="image/*,audio/*,video/*,.pdf,.doc,.docx" hidden />
+        <input type="text" id="msg-input" maxlength="2000" placeholder="Message" disabled autocomplete="off" />
+        <button type="submit" class="btn btn-primary" id="send-btn" disabled>Send</button>
+      </form>
+    </section>
+  </div>
+</div>
+<div class="incoming-call-modal" id="incoming-call">
+  <div class="incoming-call-card">
+    <p id="incoming-label" style="font-weight:600;font-size:1.1rem;">Incoming call</p>
+    <p id="incoming-from" style="color:var(--text-muted);"></p>
+    <div style="display:flex;gap:0.75rem;justify-content:center;margin-top:1rem;">
+      <button type="button" class="btn" id="btn-decline-call" style="background:#c0392b;color:#fff;">Decline</button>
+      <button type="button" class="btn btn-primary" id="btn-accept-call">Accept</button>
     </div>
-    <button type="button" class="member-item" id="family-room-btn">
-      <span class="member-avatar">🏠</span>
-      <span class="info"><strong>Family room</strong><div class="meta">Everyone</div></span>
-      <span class="unread-badge" id="unread-family" hidden>0</span>
-    </button>
-    <div class="member-list" id="member-list">Loading…</div>
-  </aside>
-  <section class="chat-main">
-    <div class="chat-main-head">
-      <span id="chat-title">Select a chat</span>
-      <span>
-        <button type="button" class="icon-btn" id="btn-audio-call" title="Audio call" hidden>📞</button>
-        <button type="button" class="icon-btn" id="btn-video-call" title="Video call" hidden>📹</button>
-      </span>
-    </div>
-    <div class="call-bar" id="call-bar">
-      <video id="local-video" muted playsinline></video>
-      <video id="remote-video" playsinline></video>
-      <span id="call-status">Calling…</span>
-      <button type="button" class="btn" id="btn-end-call" style="background:#c0392b;color:#fff;">End</button>
-    </div>
-    <div class="messages" id="messages"></div>
-    <form class="composer" id="composer">
-      <div class="reply-bar" id="reply-bar" hidden><span id="reply-text"></span><button type="button" id="reply-cancel">✕</button></div>
-      <button type="button" class="icon-btn" id="btn-attach" title="Attach">📎</button>
-      <button type="button" class="icon-btn" id="btn-voice" title="Voice note">🎤</button>
-      <input type="file" id="file-input" accept="image/*,audio/*,video/*,.pdf,.doc,.docx" hidden />
-      <input type="text" id="msg-input" maxlength="2000" placeholder="Message" disabled autocomplete="off" />
-      <button type="submit" class="btn btn-primary" id="send-btn" disabled>Send</button>
-    </form>
-  </section>
+  </div>
 </div>
 <div id="app-footer"></div>
 <script type="module">
@@ -113,23 +222,31 @@ await requireLoggedIn();
 const { data: { user } } = await supabase.auth.getUser();
 if (!user) throw new Error('Not signed in');
 
-let mode = null; // family | dm | group
+let mode = null;
 let peerId = null;
 let groupId = null;
 let replyTo = null;
+let editId = null;
 let pollTimer = null;
 let lastFingerprint = '';
 let nameCache = {};
 let unreadMap = {};
 let pc = null;
 let localStream = null;
+let callChannel = null;
+let pendingIncoming = null;
+let rowsCache = [];
+
+const REACTIONS = ['👍','❤️','😂','😮','🙏'];
+const EMOJIS = '😀 😃 😄 😁 😅 😂 🤣 😊 😇 🙂 😉 😍 🥰 😘 😗 😋 😜 🤔 🤨 😐 😑 😶 🙄 😏 😣 😥 😮 🤐 😯 😪 😫 🥱 😴 😌 😛 😓 😕 🙃 🫠 👍 👎 👏 🙌 🤝 ✌️ 🤞 🫶 ❤️ 🧡 💛 💚 💙 💜 🖤 🔥 ⭐ ✅ ❌ 🎉 🙏'.split(/\s+/);
+const STICKERS = ['👋','🎉','🔥','💯','✨','🙌','💪','🫡','🥳','😎','🤝','❤️','💚','🌟','🏆','📌','✅','🙏'];
 
 const memberList = document.getElementById('member-list');
 const messagesEl = document.getElementById('messages');
 const titleEl = document.getElementById('chat-title');
 const input = document.getElementById('msg-input');
 const sendBtn = document.getElementById('send-btn');
-const REACTIONS = ['👍','❤️','😂','😮','🙏'];
+const wrap = document.getElementById('chat-wrap');
 
 function initials(name) {
   if (!name) return '?';
@@ -147,15 +264,61 @@ function avatarMarkup(name, photo) {
   if (photo) return `<span class="member-avatar"><img src="${escapeAttr(photo)}" alt="" /></span>`;
   return `<span class="member-avatar">${escapeHtml(initials(name))}</span>`;
 }
+function showThread(on) {
+  wrap.classList.toggle('show-thread', !!on);
+}
+function clearThread() {
+  mode = null; peerId = null; groupId = null;
+  messagesEl.innerHTML = '';
+  titleEl.textContent = 'Select a chat';
+  enableComposer(false);
+  document.getElementById('group-settings').classList.remove('open');
+  document.getElementById('btn-group-settings').hidden = true;
+  lastFingerprint = '';
+  rowsCache = [];
+  document.querySelectorAll('.member-item').forEach(el => el.classList.remove('active'));
+  showThread(false);
+}
 function enableComposer(on) {
   input.disabled = !on;
   sendBtn.disabled = !on;
   document.getElementById('btn-attach').disabled = !on;
   document.getElementById('btn-voice').disabled = !on;
-  const callOk = on && (mode === 'dm' || mode === 'group');
+  document.getElementById('btn-emoji').disabled = !on;
+  document.getElementById('btn-sticker').disabled = !on;
+  const callOk = on && mode === 'dm';
   document.getElementById('btn-audio-call').hidden = !callOk;
   document.getElementById('btn-video-call').hidden = !callOk;
+  document.getElementById('btn-group-settings').hidden = !(on && mode === 'group');
 }
+
+document.getElementById('back-chat').onclick = () => clearThread();
+
+// Themes
+const THEME_KEY = 'sjb-chat-bg';
+function applyTheme(val) {
+  if (!val) { messagesEl.style.background = ''; messagesEl.style.backgroundImage = ''; return; }
+  if (val.startsWith('url(') || val.startsWith('http') || val.startsWith('data:')) {
+    messagesEl.style.backgroundImage = val.startsWith('url') ? val : `url(${val})`;
+    messagesEl.style.backgroundColor = 'transparent';
+  } else {
+    messagesEl.style.backgroundImage = '';
+    messagesEl.style.background = val;
+  }
+  try { localStorage.setItem(THEME_KEY, val); } catch {}
+}
+try { applyTheme(localStorage.getItem(THEME_KEY)); } catch {}
+document.getElementById('btn-theme').onclick = () => document.getElementById('theme-panel').classList.toggle('open');
+document.querySelectorAll('.theme-swatch').forEach(b => b.onclick = () => applyTheme(b.dataset.bg));
+document.getElementById('bg-file').onchange = async (e) => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  const path = `chat/${user.id}/bg_${Date.now()}.jpg`;
+  const { error } = await supabase.storage.from('uploads').upload(path, f, { upsert: true });
+  if (error) { alert(error.message); return; }
+  const { data: pub } = supabase.storage.from('uploads').getPublicUrl(path);
+  applyTheme(pub.publicUrl);
+};
 
 async function loadUnreads() {
   const { data } = await supabase.rpc('chat_unread_counts');
@@ -169,7 +332,6 @@ async function loadUnreads() {
   if (unreadMap.family > 0) { fam.hidden = false; fam.textContent = unreadMap.family; }
   else fam.hidden = true;
 }
-
 async function markRead() {
   if (!mode) return;
   await supabase.rpc('mark_chat_read', {
@@ -181,23 +343,46 @@ async function markRead() {
   renderSidebar();
 }
 
+async function loadInvites() {
+  const box = document.getElementById('invites-box');
+  const { data } = await supabase.from('chat_group_invites')
+    .select('id, group_id, status, chat_groups(name)')
+    .eq('user_id', user.id).eq('status', 'pending');
+  if (!data?.length) { box.innerHTML = ''; return; }
+  box.innerHTML = data.map(inv => `
+    <div class="invite-banner">
+      Invite to <strong>${escapeHtml(inv.chat_groups?.name || 'group')}</strong>
+      <button type="button" class="mini-btn good" data-accept="${inv.id}" data-gid="${inv.group_id}">Accept</button>
+      <button type="button" class="mini-btn bad" data-decline="${inv.id}">Decline</button>
+    </div>
+  `).join('');
+  box.querySelectorAll('[data-accept]').forEach(b => b.onclick = async () => {
+    await supabase.from('chat_group_invites').update({ status: 'accepted' }).eq('id', b.dataset.accept);
+    await supabase.from('chat_group_members').upsert({ group_id: b.dataset.gid, user_id: user.id, role: 'member' });
+    await loadInvites(); await loadDirectory();
+  });
+  box.querySelectorAll('[data-decline]').forEach(b => b.onclick = async () => {
+    await supabase.from('chat_group_invites').update({ status: 'declined' }).eq('id', b.dataset.decline);
+    await loadInvites();
+  });
+}
+
 async function loadDirectory() {
   let members = [];
   const rpc = await supabase.rpc('member_directory');
   if (!rpc.error && rpc.data) members = rpc.data.filter(m => m.id !== user.id);
   else {
-    const res = await supabase.from('profiles').select('id, full_name, profession, location, profile_photo_url').eq('status','approved').neq('id', user.id).order('full_name').limit(200);
+    const res = await supabase.from('profiles').select('id, full_name, profession, location, profile_photo_url')
+      .eq('status','approved').neq('id', user.id).order('full_name').limit(200);
     members = res.data || [];
   }
   members.forEach(m => { nameCache[m.id] = m; });
+  const { data: me } = await supabase.from('profiles').select('id, full_name, profile_photo_url').eq('id', user.id).maybeSingle();
+  if (me) nameCache[user.id] = me;
 
   let groups = [];
-  try {
-    const g = await supabase.from('chat_groups').select('id, name, description, photo_url').eq('is_active', true);
-    if (g.error) console.warn('groups load', g.error.message);
-    else groups = g.data || [];
-  } catch (e) { console.warn('groups load failed', e); }
-
+  const g = await supabase.from('chat_groups').select('id, name, description, photo_url, only_admins_can_post, members_can_edit_info, created_by').eq('is_active', true);
+  if (!g.error) groups = g.data || [];
   window.__chatMembers = members;
   window.__chatGroups = groups;
   await loadUnreads();
@@ -212,7 +397,7 @@ function renderSidebar() {
     const n = unreadMap['group:' + g.id] || 0;
     html += `<button type="button" class="member-item" data-kind="group" data-id="${g.id}" data-name="${escapeAttr(g.name)}">
       ${avatarMarkup(g.name, g.photo_url)}
-      <span class="info"><strong>${escapeHtml(g.name)}</strong><div class="meta">Group</div></span>
+      <span class="info"><strong>${escapeHtml(g.name)}${n ? ` (${n})` : ''}</strong><div class="meta">Group</div></span>
       ${n ? `<span class="unread-badge">${n}</span>` : ''}
     </button>`;
   });
@@ -236,7 +421,9 @@ function renderSidebar() {
 }
 
 async function fetchMessages() {
-  let q = supabase.from('chat_messages').select('id, sender_id, body, created_at, reply_to_id, media_url, media_type, media_name, room, group_id, recipient_id').order('created_at', { ascending: true }).limit(250);
+  let q = supabase.from('chat_messages')
+    .select('id, sender_id, body, created_at, edited_at, is_deleted, reply_to_id, media_url, media_type, media_name, room, group_id, recipient_id')
+    .order('created_at', { ascending: true }).limit(250);
   if (mode === 'family') q = q.eq('room', 'family');
   else if (mode === 'dm') q = q.eq('room', 'dm').or(`and(sender_id.eq.${user.id},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${user.id})`);
   else if (mode === 'group') q = q.eq('room', 'group').eq('group_id', groupId);
@@ -244,7 +431,6 @@ async function fetchMessages() {
   const { data } = await q;
   return data || [];
 }
-
 async function fetchReactions(ids) {
   if (!ids.length) return {};
   const { data } = await supabase.from('chat_reactions').select('message_id, user_id, emoji').in('message_id', ids);
@@ -255,16 +441,27 @@ async function fetchReactions(ids) {
   });
   return map;
 }
-
 function mediaHtml(r) {
   if (!r.media_url) return '';
   if (r.media_type === 'image') return `<div class="media-preview"><a href="${escapeAttr(r.media_url)}" target="_blank"><img src="${escapeAttr(r.media_url)}" alt="" /></a></div>`;
   if (r.media_type === 'video') return `<div class="media-preview"><video controls src="${escapeAttr(r.media_url)}"></video></div>`;
-  if (r.media_type === 'audio' || r.media_type === 'voice') return `<div class="media-preview"><audio controls src="${escapeAttr(r.media_url)}"></audio></div>`;
+  if (r.media_type === 'audio' || r.media_type === 'voice')
+    return `<div class="media-preview"><audio class="voice-note" controls src="${escapeAttr(r.media_url)}" data-mid="${r.id}"></audio></div>`;
+  if (r.media_type === 'sticker') return `<div class="media-preview" style="font-size:3rem;">${escapeHtml(r.body || '')}</div>`;
   return `<div class="media-preview"><a href="${escapeAttr(r.media_url)}" target="_blank">📎 ${escapeHtml(r.media_name || 'File')}</a></div>`;
+}
+function wireVoiceAutoplay() {
+  const audios = [...messagesEl.querySelectorAll('audio.voice-note')];
+  audios.forEach((a, i) => {
+    a.onended = () => {
+      const next = audios[i + 1];
+      if (next) { next.play().catch(() => {}); }
+    };
+  });
 }
 
 async function renderMessages(rows) {
+  rowsCache = rows;
   const ids = rows.map(r => r.id);
   const reactions = await fetchReactions(ids);
   const byId = Object.fromEntries(rows.map(r => [r.id, r]));
@@ -273,25 +470,38 @@ async function renderMessages(rows) {
     const mine = r.sender_id === user.id;
     const senderName = nameCache[r.sender_id]?.full_name || (mine ? 'You' : 'Member');
     const when = r.created_at ? new Date(r.created_at).toLocaleString() : '';
+    if (r.is_deleted) {
+      return `<div class="bubble-wrap ${mine ? 'mine' : ''}" data-id="${r.id}">
+        ${showSender && !mine ? `<div class="bubble-sender">${escapeHtml(senderName)}</div>` : ''}
+        <div class="bubble" style="opacity:0.65;font-style:italic;">This message was deleted<span class="when">${when}</span></div>
+      </div>`;
+    }
     const parent = r.reply_to_id ? byId[r.reply_to_id] : null;
-    const quote = parent ? `<div class="reply-quote">${escapeHtml((nameCache[parent.sender_id]?.full_name || '') + ': ' + (parent.body || parent.media_type || '').slice(0, 80))}</div>` : '';
+    const quote = parent ? `<div class="reply-quote">${escapeHtml((nameCache[parent.sender_id]?.full_name || '') + ': ' + (parent.is_deleted ? '[deleted]' : (parent.body || parent.media_type || '')).slice(0, 80))}</div>` : '';
     const rx = reactions[r.id] || [];
     const rxHtml = rx.length ? `<div class="reactions">${summarizeReactions(rx, r.id)}</div>` : '';
+    const ownActs = mine ? `<button type="button" data-act="edit" data-id="${r.id}">Edit</button>
+      <button type="button" data-act="del" data-id="${r.id}">Delete</button>` : '';
     return `<div class="bubble-wrap ${mine ? 'mine' : ''}" data-id="${r.id}">
       ${showSender && !mine ? `<div class="bubble-sender">${escapeHtml(senderName)}</div>` : ''}
-      <div class="bubble">${quote}${mediaHtml(r)}${r.body ? escapeHtml(r.body) : ''}<span class="when">${when}</span></div>
+      <div class="bubble">${quote}${mediaHtml(r)}${r.media_type === 'sticker' ? '' : (r.body ? escapeHtml(r.body) : '')}
+        ${r.edited_at ? '<span class="edited"> · edited</span>' : ''}
+        <span class="when">${when}</span></div>
       ${rxHtml}
       <div class="bubble-actions">
         <button type="button" data-act="reply" data-id="${r.id}">Reply</button>
         ${REACTIONS.map(e => `<button type="button" data-act="react" data-id="${r.id}" data-emoji="${e}">${e}</button>`).join('')}
+        ${ownActs}
       </div>
     </div>`;
   }).join('') || '<p style="color:var(--text-muted);">No messages yet.</p>';
   messagesEl.scrollTop = messagesEl.scrollHeight;
-  messagesEl.querySelectorAll('[data-act="reply"]').forEach(b => b.addEventListener('click', () => setReply(b.dataset.id, byId[b.dataset.id])));
-  messagesEl.querySelectorAll('[data-act="react"]').forEach(b => b.addEventListener('click', () => toggleReaction(b.dataset.id, b.dataset.emoji)));
+  messagesEl.querySelectorAll('[data-act="reply"]').forEach(b => b.onclick = () => setReply(b.dataset.id, byId[b.dataset.id]));
+  messagesEl.querySelectorAll('[data-act="react"]').forEach(b => b.onclick = () => toggleReaction(b.dataset.id, b.dataset.emoji));
+  messagesEl.querySelectorAll('[data-act="edit"]').forEach(b => b.onclick = () => startEdit(b.dataset.id, byId[b.dataset.id]));
+  messagesEl.querySelectorAll('[data-act="del"]').forEach(b => b.onclick = () => deleteMsg(b.dataset.id));
+  wireVoiceAutoplay();
 }
-
 function summarizeReactions(rx, msgId) {
   const counts = {};
   rx.forEach(r => { counts[r.emoji] = (counts[r.emoji] || 0) + 1; });
@@ -299,53 +509,65 @@ function summarizeReactions(rx, msgId) {
     `<span class="reaction-chip" data-act="react" data-id="${msgId}" data-emoji="${e}">${e} ${c}</span>`
   ).join('');
 }
-
 function setReply(id, row) {
+  editId = null;
+  document.getElementById('edit-bar').hidden = true;
   replyTo = id;
   document.getElementById('reply-bar').hidden = false;
   document.getElementById('reply-text').textContent = 'Replying: ' + (row?.body || row?.media_type || '').slice(0, 60);
+  input.focus();
 }
 document.getElementById('reply-cancel').onclick = () => {
   replyTo = null;
   document.getElementById('reply-bar').hidden = true;
 };
-
-async function toggleReaction(messageId, emoji) {
-  // One reaction per user per message: same emoji toggles off; different emoji replaces.
-  const { data: mine } = await supabase
-    .from('chat_reactions')
-    .select('id, emoji')
-    .eq('message_id', messageId)
-    .eq('user_id', user.id);
-  const same = (mine || []).find((r) => r.emoji === emoji);
-  if (same) {
-    await supabase.from('chat_reactions').delete().eq('id', same.id);
-  } else {
-    if (mine?.length) {
-      await supabase.from('chat_reactions').delete().eq('message_id', messageId).eq('user_id', user.id);
-    }
-    await supabase.from('chat_reactions').insert({ message_id: messageId, user_id: user.id, emoji });
-  }
-  lastFingerprint = ''; // force redraw
+function startEdit(id, row) {
+  if (!row || row.is_deleted || row.media_type) return;
+  replyTo = null;
+  document.getElementById('reply-bar').hidden = true;
+  editId = id;
+  document.getElementById('edit-bar').hidden = false;
+  input.value = row.body || '';
+  input.focus();
+}
+document.getElementById('edit-cancel').onclick = () => {
+  editId = null;
+  document.getElementById('edit-bar').hidden = true;
+  input.value = '';
+};
+async function deleteMsg(id) {
+  if (!confirm('Delete this message for everyone?')) return;
+  await supabase.from('chat_messages').update({ is_deleted: true, body: '', deleted_at: new Date().toISOString() }).eq('id', id).eq('sender_id', user.id);
+  lastFingerprint = '';
   await refreshMessages();
 }
-
+async function toggleReaction(messageId, emoji) {
+  const { data: mine } = await supabase.from('chat_reactions').select('id, emoji').eq('message_id', messageId).eq('user_id', user.id);
+  const same = (mine || []).find(r => r.emoji === emoji);
+  if (same) await supabase.from('chat_reactions').delete().eq('id', same.id);
+  else {
+    if (mine?.length) await supabase.from('chat_reactions').delete().eq('message_id', messageId).eq('user_id', user.id);
+    await supabase.from('chat_reactions').insert({ message_id: messageId, user_id: user.id, emoji });
+  }
+  lastFingerprint = '';
+  await refreshMessages();
+}
 async function refreshMessages() {
+  if (!mode) return;
   const rows = await fetchMessages();
-  const fp = rows.map(r => r.id).join(',');
+  const fp = rows.map(r => r.id + (r.edited_at||'') + (r.is_deleted?'1':'0')).join(',');
   if (fp !== lastFingerprint) {
     lastFingerprint = fp;
     await renderMessages(rows);
   }
 }
-
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
     await refreshMessages();
     await loadUnreads();
     renderSidebar();
-  }, 3000);
+  }, 2500);
 }
 
 async function openFamily() {
@@ -354,12 +576,14 @@ async function openFamily() {
   enableComposer(true);
   document.querySelectorAll('.member-item').forEach(el => el.classList.remove('active'));
   document.getElementById('family-room-btn').classList.add('active');
+  document.getElementById('group-settings').classList.remove('open');
   lastFingerprint = '';
+  showThread(true);
+  messagesEl.innerHTML = '<p style="color:var(--text-muted);">Loading…</p>';
   await refreshMessages();
   await markRead();
   startPolling();
 }
-
 async function openDm(id, name, btn) {
   mode = 'dm'; peerId = id; groupId = null;
   titleEl.textContent = name;
@@ -367,12 +591,14 @@ async function openDm(id, name, btn) {
   document.querySelectorAll('.member-item').forEach(el => el.classList.remove('active'));
   document.getElementById('family-room-btn').classList.remove('active');
   btn?.classList.add('active');
+  document.getElementById('group-settings').classList.remove('open');
   lastFingerprint = '';
+  showThread(true);
+  messagesEl.innerHTML = '<p style="color:var(--text-muted);">Loading…</p>';
   await refreshMessages();
   await markRead();
   startPolling();
 }
-
 async function openGroup(id, name, btn) {
   mode = 'group'; peerId = null; groupId = id;
   titleEl.textContent = name;
@@ -381,22 +607,33 @@ async function openGroup(id, name, btn) {
   document.getElementById('family-room-btn').classList.remove('active');
   btn?.classList.add('active');
   lastFingerprint = '';
+  showThread(true);
+  messagesEl.innerHTML = '<p style="color:var(--text-muted);">Loading…</p>';
   await refreshMessages();
   await markRead();
   startPolling();
 }
-
 document.getElementById('family-room-btn').addEventListener('click', openFamily);
 
 async function sendMessage({ body = '', media_url = null, media_type = null, media_name = null } = {}) {
   if (!mode) return;
-  if (!body && !media_url) return;
+  if (editId) {
+    if (!body.trim()) return;
+    await supabase.from('chat_messages').update({ body: body.trim(), edited_at: new Date().toISOString() }).eq('id', editId).eq('sender_id', user.id);
+    editId = null;
+    document.getElementById('edit-bar').hidden = true;
+    input.value = '';
+    lastFingerprint = '';
+    await refreshMessages();
+    return;
+  }
+  if (!body && !media_url && media_type !== 'sticker') return;
   const row = {
     room: mode,
     sender_id: user.id,
     recipient_id: mode === 'dm' ? peerId : null,
     group_id: mode === 'group' ? groupId : null,
-    body: body || (media_type === 'voice' ? 'Voice message' : media_type ? (media_name || media_type) : ''),
+    body: body || (media_type === 'voice' ? 'Voice message' : media_type === 'sticker' ? body : (media_name || media_type || '')),
     reply_to_id: replyTo,
     media_url, media_type, media_name,
   };
@@ -408,19 +645,44 @@ async function sendMessage({ body = '', media_url = null, media_type = null, med
   lastFingerprint = '';
   await refreshMessages();
 }
-
 document.getElementById('composer').addEventListener('submit', async e => {
   e.preventDefault();
   await sendMessage({ body: input.value.trim() });
 });
+
+// Emoji / stickers
+const emojiPanel = document.getElementById('emoji-panel');
+const stickerPanel = document.getElementById('sticker-panel');
+emojiPanel.innerHTML = EMOJIS.map(e => `<button type="button" data-e="${e}">${e}</button>`).join('');
+stickerPanel.innerHTML = STICKERS.map(e => `<button type="button" data-s="${e}">${e}</button>`).join('');
+document.getElementById('btn-emoji').onclick = () => {
+  stickerPanel.classList.remove('open');
+  emojiPanel.classList.toggle('open');
+};
+document.getElementById('btn-sticker').onclick = () => {
+  emojiPanel.classList.remove('open');
+  stickerPanel.classList.toggle('open');
+};
+emojiPanel.onclick = (e) => {
+  const b = e.target.closest('[data-e]');
+  if (!b) return;
+  input.value += b.dataset.e;
+  input.focus();
+};
+stickerPanel.onclick = async (e) => {
+  const b = e.target.closest('[data-s]');
+  if (!b) return;
+  await sendMessage({ body: b.dataset.s, media_type: 'sticker' });
+  stickerPanel.classList.remove('open');
+};
 
 document.getElementById('btn-attach').onclick = () => document.getElementById('file-input').click();
 document.getElementById('file-input').onchange = async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
   const path = `chat/${user.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
-  const { error: upErr } = await supabase.storage.from('uploads').upload(path, file, { upsert: false });
-  if (upErr) { alert(upErr.message + ' (ensure uploads bucket + policies)'); return; }
+  const { error: upErr } = await supabase.storage.from('uploads').upload(path, file);
+  if (upErr) { alert(upErr.message); return; }
   const { data: pub } = supabase.storage.from('uploads').getPublicUrl(path);
   let media_type = 'file';
   if (file.type.startsWith('image/')) media_type = 'image';
@@ -430,9 +692,7 @@ document.getElementById('file-input').onchange = async (e) => {
   e.target.value = '';
 };
 
-let recording = false;
-let mediaRecorder = null;
-let chunks = [];
+let recording = false, mediaRecorder = null, chunks = [];
 document.getElementById('btn-voice').onclick = async () => {
   if (!recording) {
     try {
@@ -452,7 +712,7 @@ document.getElementById('btn-voice').onclick = async () => {
       mediaRecorder.start();
       recording = true;
       document.getElementById('btn-voice').textContent = '⏹';
-    } catch (err) { alert('Microphone permission needed'); }
+    } catch { alert('Microphone permission needed'); }
   } else {
     mediaRecorder?.stop();
     recording = false;
@@ -460,57 +720,185 @@ document.getElementById('btn-voice').onclick = async () => {
   }
 };
 
+// Groups
 document.getElementById('btn-new-group').onclick = async () => {
   const name = prompt('Group name');
   if (!name?.trim()) return;
   const { data: g, error } = await supabase.from('chat_groups').insert({ name: name.trim(), created_by: user.id }).select('id, name').single();
-  if (error) { alert(error.message + ' — run sql/023'); return; }
+  if (error) { alert(error.message + ' — run sql/023 + 024 + 027'); return; }
   await supabase.from('chat_group_members').insert({ group_id: g.id, user_id: user.id, role: 'admin' });
-  const add = prompt('Add member emails or leave blank (you can add later from profile IDs). Optional: paste one user UUID to invite.');
-  if (add?.trim()) {
-    await supabase.from('chat_group_members').insert({ group_id: g.id, user_id: add.trim(), role: 'member' });
-  }
   await loadDirectory();
-  openGroup(g.id, g.name);
+  const btn = [...memberList.querySelectorAll('[data-kind="group"]')].find(b => b.dataset.id === g.id);
+  openGroup(g.id, g.name, btn);
 };
 
-// --- Simple 1:1 WebRTC via chat_calls signaling (STUN only; may fail behind strict NAT) ---
+document.getElementById('btn-group-settings').onclick = async () => {
+  const panel = document.getElementById('group-settings');
+  panel.classList.toggle('open');
+  if (!panel.classList.contains('open') || !groupId) return;
+  const g = (window.__chatGroups || []).find(x => x.id === groupId);
+  const { data: mems } = await supabase.from('chat_group_members').select('user_id, role').eq('group_id', groupId);
+  const isAdmin = (mems || []).some(m => m.user_id === user.id && m.role === 'admin') || g?.created_by === user.id;
+  const memberNames = (mems || []).map(m => {
+    const n = nameCache[m.user_id]?.full_name || m.user_id.slice(0, 8);
+    return `${n} (${m.role})`;
+  }).join(', ');
+  panel.innerHTML = `
+    <p><strong>${escapeHtml(g?.name || 'Group')}</strong></p>
+    <p style="color:var(--text-muted);">${escapeHtml(g?.description || 'No description')}</p>
+    <p style="font-size:0.8rem;">Members: ${escapeHtml(memberNames || '—')}</p>
+    ${isAdmin ? `
+      <button type="button" class="mini-btn good" id="gs-edit">Edit info</button>
+      <button type="button" class="mini-btn good" id="gs-invite">Invite member</button>
+      <button type="button" class="mini-btn" id="gs-lock">${g?.only_admins_can_post ? 'Unlock posting' : 'Lock: admins only post'}</button>
+    ` : ''}
+    <button type="button" class="mini-btn bad" id="gs-exit">Exit group</button>
+  `;
+  document.getElementById('gs-exit')?.addEventListener('click', async () => {
+    if (!confirm('Leave this group?')) return;
+    await supabase.from('chat_group_members').delete().eq('group_id', groupId).eq('user_id', user.id);
+    clearThread();
+    await loadDirectory();
+  });
+  document.getElementById('gs-lock')?.addEventListener('click', async () => {
+    await supabase.from('chat_groups').update({ only_admins_can_post: !g?.only_admins_can_post }).eq('id', groupId);
+    await loadDirectory();
+    document.getElementById('btn-group-settings').click();
+  });
+  document.getElementById('gs-edit')?.addEventListener('click', async () => {
+    const name = prompt('Group name', g?.name || '');
+    if (name == null) return;
+    const description = prompt('Description', g?.description || '') ?? '';
+    const rules = prompt('Group rules (optional)', g?.rules || '') ?? '';
+    await supabase.from('chat_groups').update({ name: name.trim(), description, rules }).eq('id', groupId);
+    titleEl.textContent = name.trim();
+    await loadDirectory();
+  });
+  document.getElementById('gs-invite')?.addEventListener('click', async () => {
+    const list = (window.__chatMembers || []).map(m => m.full_name).join(', ');
+    const who = prompt('Invite by exact full name from directory:\n' + list.slice(0, 300));
+    if (!who?.trim()) return;
+    const m = (window.__chatMembers || []).find(x => (x.full_name || '').toLowerCase() === who.trim().toLowerCase());
+    if (!m) { alert('Name not found in member list'); return; }
+    const { error } = await supabase.from('chat_group_invites').upsert({
+      group_id: groupId, user_id: m.id, invited_by: user.id, status: 'pending'
+    }, { onConflict: 'group_id,user_id' });
+    if (error) alert(error.message + ' (run sql/027)');
+    else alert('Invite sent. They must accept.');
+  });
+};
+
+// ---- Calls with recipient notification via Realtime ----
 const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
 
+async function listenForCalls() {
+  if (callChannel) await supabase.removeChannel(callChannel);
+  callChannel = supabase.channel('calls-inbox-' + user.id)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_calls' }, async (payload) => {
+      const c = payload.new;
+      if (c.peer_id !== user.id || c.status !== 'ringing') return;
+      pendingIncoming = c;
+      document.getElementById('incoming-from').textContent =
+        (nameCache[c.caller_id]?.full_name || 'Someone') + ' · ' + c.call_type;
+      document.getElementById('incoming-call').classList.add('show');
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_calls' }, async (payload) => {
+      const c = payload.new;
+      if (window.__activeCallId && c.id === window.__activeCallId && (c.status === 'ended' || c.status === 'declined')) {
+        endLocalCall(false);
+      }
+      if (pendingIncoming && c.id === pendingIncoming.id && c.status !== 'ringing') {
+        document.getElementById('incoming-call').classList.remove('show');
+        pendingIncoming = null;
+      }
+    })
+    .subscribe();
+}
+
 async function startCall(callType) {
-  if (mode !== 'dm') { alert('Video/audio calls currently work best in 1:1 DM. Group calls need a dedicated SFU (e.g. Daily/LiveKit).'); return; }
+  if (mode !== 'dm' || !peerId) { alert('Calls work in 1:1 chats.'); return; }
   document.getElementById('call-bar').classList.add('active');
-  document.getElementById('call-status').textContent = 'Starting ' + callType + ' call…';
-  localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: callType === 'video' });
+  document.getElementById('call-status').textContent = 'Starting ' + callType + '…';
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: callType === 'video' });
+  } catch { alert('Camera/mic permission needed'); document.getElementById('call-bar').classList.remove('active'); return; }
   document.getElementById('local-video').srcObject = localStream;
   pc = new RTCPeerConnection({ iceServers });
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
   pc.ontrack = (ev) => { document.getElementById('remote-video').srcObject = ev.streams[0]; };
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  const { data: call } = await supabase.from('chat_calls').insert({
+  const { data: call, error } = await supabase.from('chat_calls').insert({
     room: 'dm', peer_id: peerId, caller_id: user.id, call_type: callType, status: 'ringing',
-    signal: { offer },
+    signal: { type: 'offer', sdp: offer },
   }).select('id').single();
-  pc.onicecandidate = async (ev) => {
-    if (ev.candidate && call?.id) {
-      await supabase.from('chat_calls').update({ signal: { offer, ice: ev.candidate } }).eq('id', call.id);
+  if (error) { alert(error.message); endLocalCall(false); return; }
+  window.__activeCallId = call.id;
+  document.getElementById('call-status').textContent = 'Ringing…';
+  // poll for answer
+  const poll = setInterval(async () => {
+    if (!window.__activeCallId) { clearInterval(poll); return; }
+    const { data } = await supabase.from('chat_calls').select('*').eq('id', window.__activeCallId).single();
+    if (!data) return;
+    if (data.status === 'declined' || data.status === 'ended') { clearInterval(poll); endLocalCall(false); return; }
+    if (data.status === 'active' && data.signal?.type === 'answer' && pc && !pc.currentRemoteDescription) {
+      await pc.setRemoteDescription(data.signal.sdp);
+      document.getElementById('call-status').textContent = 'Connected';
+      clearInterval(poll);
     }
-  };
-  document.getElementById('call-status').textContent = 'Ringing… (peer must accept)';
-  window.__activeCallId = call?.id;
+  }, 1500);
 }
 
+async function acceptCall() {
+  const c = pendingIncoming;
+  if (!c) return;
+  document.getElementById('incoming-call').classList.remove('show');
+  document.getElementById('call-bar').classList.add('active');
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: c.call_type === 'video' });
+  } catch { alert('Permission needed'); return; }
+  document.getElementById('local-video').srcObject = localStream;
+  pc = new RTCPeerConnection({ iceServers });
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.ontrack = (ev) => { document.getElementById('remote-video').srcObject = ev.streams[0]; };
+  if (c.signal?.sdp) await pc.setRemoteDescription(c.signal.sdp);
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await supabase.from('chat_calls').update({
+    status: 'active',
+    signal: { type: 'answer', sdp: answer },
+  }).eq('id', c.id);
+  window.__activeCallId = c.id;
+  pendingIncoming = null;
+  document.getElementById('call-status').textContent = 'Connected';
+}
+async function declineCall() {
+  if (pendingIncoming) {
+    await supabase.from('chat_calls').update({ status: 'declined', ended_at: new Date().toISOString() }).eq('id', pendingIncoming.id);
+    pendingIncoming = null;
+  }
+  document.getElementById('incoming-call').classList.remove('show');
+}
+function endLocalCall(updateDb = true) {
+  document.getElementById('call-bar').classList.remove('active');
+  pc?.close(); pc = null;
+  localStream?.getTracks().forEach(t => t.stop());
+  localStream = null;
+  if (updateDb && window.__activeCallId) {
+    supabase.from('chat_calls').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', window.__activeCallId);
+  }
+  window.__activeCallId = null;
+}
 document.getElementById('btn-audio-call').onclick = () => startCall('audio');
 document.getElementById('btn-video-call').onclick = () => startCall('video');
-document.getElementById('btn-end-call').onclick = async () => {
-  document.getElementById('call-bar').classList.remove('active');
-  pc?.close();
-  localStream?.getTracks().forEach(t => t.stop());
-  if (window.__activeCallId) await supabase.from('chat_calls').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', window.__activeCallId);
-};
+document.getElementById('btn-end-call').onclick = () => endLocalCall(true);
+document.getElementById('btn-accept-call').onclick = acceptCall;
+document.getElementById('btn-decline-call').onclick = declineCall;
 
+// Ensure Realtime on chat_calls
+await listenForCalls();
 await loadDirectory();
+await loadInvites();
 </script>
 </body>
 </html>
