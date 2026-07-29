@@ -88,6 +88,7 @@
     <button class="tab-btn" data-tab="content">Content</button>
     <button class="tab-btn" data-tab="savings">Savings Groups</button>
     <button class="tab-btn" data-tab="elections">Elections</button>
+    <button class="tab-btn" data-tab="leadership">Leadership</button>
     <button class="tab-btn" data-tab="financials">Approvals &amp; Financials</button>
     <button class="tab-btn" data-tab="feedback">Feedback Forms</button>
   </div>
@@ -180,6 +181,51 @@
     </div>
   </div>
 
+  
+  <!-- TAB: LEADERSHIP -->
+  <div class="tab-panel" id="tab-leadership">
+    <div class="card">
+      <h3 style="margin-top:0;">Leadership roster</h3>
+      <p class="empty-note">Voting is annual and only runs when you create/activate an election. Closing an election can auto-promote winners. Here you can manually add, edit, retire, or delete current and past leaders at any time.</p>
+
+      <form id="leader-add-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.65rem;align-items:end;margin-bottom:1.25rem;padding:1rem;background:#f8fafc;border:1px solid var(--border);border-radius:8px;">
+        <div class="form-group" style="margin:0;"><label>Member email *</label><input type="email" id="ldr-email" required placeholder="member@example.com" /></div>
+        <div class="form-group" style="margin:0;"><label>Position *</label><input type="text" id="ldr-position" required placeholder="Chairperson" /></div>
+        <div class="form-group" style="margin:0;"><label>Term start</label><input type="date" id="ldr-start" /></div>
+        <div class="form-group" style="margin:0;"><label>Term end</label><input type="date" id="ldr-end" /></div>
+        <div class="form-group" style="margin:0;"><label>Display order</label><input type="number" id="ldr-order" value="0" /></div>
+        <div class="form-group" style="margin:0;grid-column:1/-1;"><label>Bio</label><input type="text" id="ldr-bio" placeholder="Short public bio" /></div>
+        <div class="form-group" style="margin:0;display:flex;align-items:center;gap:0.4rem;">
+          <input type="checkbox" id="ldr-current" checked style="width:auto;" />
+          <label for="ldr-current" style="margin:0;">Current term</label>
+        </div>
+        <button type="submit" class="mini-btn good">+ Add leader</button>
+      </form>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;">
+        <strong>All leadership records</strong>
+        <button type="button" class="mini-btn" id="refresh-leaders-btn">Refresh</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Position</th>
+              <th>Term</th>
+              <th>Current</th>
+              <th>Order</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sa-leaders-tbody">
+            <tr><td colspan="6" class="empty-note">Open this tab to load…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- TAB: FEEDBACK FORMS -->
   <div class="tab-panel" id="tab-feedback">
     <div class="card">
@@ -211,6 +257,7 @@
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+      if (btn.dataset.tab === 'leadership') loadLeadershipTab();
     });
   });
 
@@ -246,6 +293,14 @@
     const div = document.createElement('div');
     div.textContent = str ?? '';
     return div.innerHTML;
+  }
+
+  function toLocalInput(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   function debounce(fn, ms) {
@@ -862,6 +917,57 @@
     });
   }
 
+  // Edit / Reset election (dedicated buttons — not status-only dropdown)
+  if (!window.__saElectionUiBound) {
+    window.__saElectionUiBound = true;
+    document.getElementById('sa-elections-list')?.addEventListener('click', async (event) => {
+      const editBtn = event.target.closest('[data-edit-election]');
+      if (editBtn) {
+        const form = document.querySelector(`form[data-election-edit="${editBtn.dataset.editElection}"]`);
+        if (form) form.hidden = !form.hidden;
+        return;
+      }
+      const cancelBtn = event.target.closest('[data-cancel-edit]');
+      if (cancelBtn) {
+        const form = document.querySelector(`form[data-election-edit="${cancelBtn.dataset.cancelEdit}"]`);
+        if (form) form.hidden = true;
+        return;
+      }
+      const resetBtn = event.target.closest('[data-reset-election]');
+      if (resetBtn) {
+        const id = resetBtn.dataset.resetElection;
+        const election = elections.find(e => e.id === id);
+        if (!confirm(`RESET "${election?.title}"?\n\nClears ALL votes and sets status to upcoming. Candidates are kept.`)) return;
+        const { data, error } = await supabase.rpc('reset_election', { p_election_id: id });
+        if (error) return flash((error.message || '') + ' — run sql/028_election_edit_reset.sql', 'error');
+        flash(typeof data === 'string' ? data : 'Election reset.');
+        return loadElectionsTab();
+      }
+    });
+
+    document.getElementById('sa-elections-list')?.addEventListener('submit', async (event) => {
+      const form = event.target.closest('form[data-election-edit]');
+      if (!form) return;
+      event.preventDefault();
+      const id = form.dataset.electionEdit;
+      const fd = new FormData(form);
+      const title = String(fd.get('title') || '').trim();
+      if (!title) return flash('Title is required.', 'error');
+      const patch = {
+        title,
+        description: String(fd.get('description') || '').trim() || null,
+      };
+      const start = String(fd.get('start_date') || '').trim();
+      const end = String(fd.get('end_date') || '').trim();
+      if (start) patch.start_date = new Date(start).toISOString();
+      if (end) patch.end_date = new Date(end).toISOString();
+      const { error } = await supabase.from('elections').update(patch).eq('id', id);
+      if (error) return flash(error.message, 'error');
+      flash('Election updated.');
+      return loadElectionsTab();
+    });
+  }
+
   function renderElectionCard(e) {
     const cands = candidatesByElection[e.id] || [];
     const statusPillClass = e.status === 'closed' ? 'pill-rejected'
@@ -896,14 +1002,34 @@
             </p>
             ${e.description ? `<p style="color:var(--text-muted); font-size:0.85rem; margin:0.35rem 0 0;">${escapeHtml(e.description)}</p>` : ''}
           </div>
-          ${actionSelectHtml('election', e.id, [
-            { value: 'draft', label: 'Set: Draft' },
-            { value: 'upcoming', label: 'Set: Upcoming' },
-            { value: 'active', label: 'Set: Active' },
-            { value: 'closed', label: 'Close & Promote Winners' },
-            { value: 'delete', label: 'Delete Election' },
-          ], `Status: ${e.status}`)}
+          <div style="display:flex;flex-direction:column;gap:0.4rem;align-items:flex-end;">
+            ${actionSelectHtml('election', e.id, [
+              { value: 'draft', label: 'Set: Draft' },
+              { value: 'upcoming', label: 'Set: Upcoming' },
+              { value: 'active', label: 'Set: Active' },
+              { value: 'closed', label: 'Close & Promote Winners' },
+              { value: 'delete', label: 'Delete Election' },
+            ], `Status: ${e.status}`)}
+            <div style="display:flex;gap:0.35rem;flex-wrap:wrap;justify-content:flex-end;">
+              <button type="button" class="mini-btn good" data-edit-election="${e.id}">Edit election</button>
+              <button type="button" class="mini-btn bad" data-reset-election="${e.id}">Reset election</button>
+            </div>
+          </div>
         </div>
+
+        <form data-election-edit="${e.id}" hidden style="margin-top:1rem;padding:1rem;background:#f8fafc;border:1px solid var(--border);border-radius:8px;">
+          <h4 style="margin:0 0 0.75rem;">Edit election</h4>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.65rem;">
+            <div class="form-group" style="margin:0;"><label>Title</label><input name="title" required value="${escapeHtml(e.title || '')}" /></div>
+            <div class="form-group" style="margin:0;"><label>Start</label><input name="start_date" type="datetime-local" value="${toLocalInput(e.start_date)}" /></div>
+            <div class="form-group" style="margin:0;"><label>End</label><input name="end_date" type="datetime-local" value="${toLocalInput(e.end_date)}" /></div>
+            <div class="form-group" style="margin:0;grid-column:1/-1;"><label>Description</label><input name="description" value="${escapeHtml(e.description || '')}" /></div>
+          </div>
+          <div style="margin-top:0.75rem;display:flex;gap:0.5rem;">
+            <button type="submit" class="mini-btn good">Save changes</button>
+            <button type="button" class="mini-btn" data-cancel-edit="${e.id}">Cancel</button>
+          </div>
+        </form>
 
         <h4 style="margin:1rem 0 0.5rem;">Candidates (${cands.length})</h4>
         <div style="overflow-x:auto;">
@@ -983,6 +1109,154 @@
     }
     return loadElectionsTab();
   }
+
+
+  // =====================================================================
+  // LEADERSHIP — full admin control of current + past leaders
+  // =====================================================================
+  async function loadLeadershipTab() {
+    const tbody = document.getElementById('sa-leaders-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-note">Loading…</td></tr>`;
+
+    const { data, error } = await supabase
+      .from('leaders')
+      .select('id, user_id, position, term_start, term_end, is_current, bio, display_order')
+      .order('is_current', { ascending: false })
+      .order('display_order', { ascending: true })
+      .order('term_start', { ascending: false });
+
+    if (error) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-note">Could not load: ${escapeHtml(error.message)}</td></tr>`;
+      return;
+    }
+    const rows = data || [];
+    await ensureProfileMap(rows.map(r => r.user_id).filter(Boolean));
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-note">No leadership records yet. Add one above or close an election to promote winners.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map(r => {
+      const name = r.user_id ? profileName(r.user_id) : '—';
+      const email = r.user_id ? profileEmail(r.user_id) : '';
+      const term = [r.term_start, r.term_end].filter(Boolean).map(d => new Date(d).toLocaleDateString()).join(' – ') || '—';
+      return `<tr data-leader-id="${r.id}">
+        <td><strong>${escapeHtml(name)}</strong><div class="empty-note" style="font-size:0.75rem;">${escapeHtml(email)}</div></td>
+        <td>${escapeHtml(r.position)}</td>
+        <td>${escapeHtml(term)}</td>
+        <td>${r.is_current ? '<span class="pill pill-active">Current</span>' : '<span class="pill pill-member">Past</span>'}</td>
+        <td>${r.display_order ?? 0}</td>
+        <td style="white-space:nowrap;">
+          <button type="button" class="mini-btn good" data-ldr-edit="${r.id}">Edit</button>
+          ${r.is_current
+            ? `<button type="button" class="mini-btn" data-ldr-retire="${r.id}">Retire</button>`
+            : `<button type="button" class="mini-btn" data-ldr-make-current="${r.id}">Make current</button>`}
+          <button type="button" class="mini-btn bad" data-ldr-delete="${r.id}">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.getElementById('refresh-leaders-btn')?.addEventListener('click', () => loadLeadershipTab());
+
+  document.getElementById('leader-add-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('ldr-email').value.trim().toLowerCase();
+    const position = document.getElementById('ldr-position').value.trim();
+    if (!email || !position) return flash('Email and position are required.', 'error');
+
+    const { data: profile, error: lookupErr } = await supabase
+      .from('profiles').select('id, full_name, email').eq('email', email).maybeSingle();
+    if (lookupErr || !profile) return flash(`No member found with email ${email}.`, 'error');
+    profileById[profile.id] = profile;
+
+    const isCurrent = document.getElementById('ldr-current').checked;
+    if (isCurrent) {
+      await supabase.from('leaders')
+        .update({ is_current: false, term_end: new Date().toISOString().slice(0, 10) })
+        .eq('position', position).eq('is_current', true);
+    }
+
+    const row = {
+      user_id: profile.id,
+      position,
+      term_start: document.getElementById('ldr-start').value || null,
+      term_end: document.getElementById('ldr-end').value || null,
+      is_current: isCurrent,
+      bio: document.getElementById('ldr-bio').value.trim() || null,
+      display_order: Number(document.getElementById('ldr-order').value) || 0,
+    };
+    const { error } = await supabase.from('leaders').insert(row);
+    if (error) return flash(error.message, 'error');
+    flash(`Added ${profile.full_name} as ${position}.`);
+    e.target.reset();
+    document.getElementById('ldr-current').checked = true;
+    return loadLeadershipTab();
+  });
+
+  document.getElementById('sa-leaders-tbody')?.addEventListener('click', async (event) => {
+    const del = event.target.closest('[data-ldr-delete]');
+    if (del) {
+      if (!confirm('Permanently delete this leadership record?')) return;
+      const { error } = await supabase.from('leaders').delete().eq('id', del.dataset.ldrDelete);
+      if (error) return flash(error.message, 'error');
+      flash('Leadership record deleted.');
+      return loadLeadershipTab();
+    }
+    const retire = event.target.closest('[data-ldr-retire]');
+    if (retire) {
+      const { error } = await supabase.from('leaders').update({
+        is_current: false,
+        term_end: new Date().toISOString().slice(0, 10),
+      }).eq('id', retire.dataset.ldrRetire);
+      if (error) return flash(error.message, 'error');
+      flash('Leader marked as past term.');
+      return loadLeadershipTab();
+    }
+    const makeCur = event.target.closest('[data-ldr-make-current]');
+    if (makeCur) {
+      const { data: row } = await supabase.from('leaders').select('position').eq('id', makeCur.dataset.ldrMakeCurrent).maybeSingle();
+      if (row?.position) {
+        await supabase.from('leaders')
+          .update({ is_current: false, term_end: new Date().toISOString().slice(0, 10) })
+          .eq('position', row.position).eq('is_current', true);
+      }
+      const { error } = await supabase.from('leaders')
+        .update({ is_current: true, term_end: null })
+        .eq('id', makeCur.dataset.ldrMakeCurrent);
+      if (error) return flash(error.message, 'error');
+      flash('Leader set as current for that position.');
+      return loadLeadershipTab();
+    }
+    const edit = event.target.closest('[data-ldr-edit]');
+    if (edit) {
+      const id = edit.dataset.ldrEdit;
+      const { data: row, error } = await supabase.from('leaders').select('*').eq('id', id).single();
+      if (error || !row) return flash(error?.message || 'Not found', 'error');
+      const position = prompt('Position', row.position);
+      if (position == null) return;
+      const bio = prompt('Bio', row.bio || '');
+      if (bio == null) return;
+      const termStart = prompt('Term start (YYYY-MM-DD)', row.term_start || '');
+      if (termStart == null) return;
+      const termEnd = prompt('Term end (YYYY-MM-DD or blank)', row.term_end || '');
+      if (termEnd == null) return;
+      const order = prompt('Display order', String(row.display_order ?? 0));
+      if (order == null) return;
+      const { error: upErr } = await supabase.from('leaders').update({
+        position: position.trim(),
+        bio: bio.trim() || null,
+        term_start: termStart.trim() || null,
+        term_end: termEnd.trim() || null,
+        display_order: Number(order) || 0,
+      }).eq('id', id);
+      if (upErr) return flash(upErr.message, 'error');
+      flash('Leadership record updated.');
+      return loadLeadershipTab();
+    }
+  });
 
   // =====================================================================
   // APPROVALS & FINANCIALS — savings-group activation & withdrawals.

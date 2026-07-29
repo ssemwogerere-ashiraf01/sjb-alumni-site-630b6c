@@ -3,6 +3,7 @@ import { BASE_URL, SOCIAL_LINKS } from './site-config.js';
 import { logout } from './auth.js';
 import { applyTheme, cycleTheme, getStoredTheme, themeLabel } from './theme.js';
 import { initUiChrome } from './ui-chrome.js';
+import { startPresence } from './presence.js';
 
 applyTheme();
 
@@ -206,6 +207,12 @@ export async function mountNav(activeKey = '') {
 
   document.getElementById('nav-signout-btn')?.addEventListener('click', logout);
   afterNavMount();
+  startPresence({
+    id: session.user.id,
+    full_name: profile?.full_name,
+    profile_photo_url: profile?.profile_photo_url,
+    role: profile?.role,
+  }).catch(() => {});
 }
 
 function wireMobileNav(mount) {

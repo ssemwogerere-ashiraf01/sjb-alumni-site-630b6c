@@ -148,6 +148,7 @@
   <!-- Tab Buttons -->
     <div class="tab-nav">
       <button class="tab-btn active" data-tab="members">Members</button>
+      <button class="tab-btn" data-tab="online">Online now</button>
       <button class="tab-btn" data-tab="content">Content Management</button>
       <button class="tab-btn" data-tab="savings">Savings Groups</button>
       <button class="tab-btn" data-tab="elections">Elections</button>
@@ -184,6 +185,37 @@
     </div>
 
     <!-- TAB 2: CONTENT MANAGEMENT -->
+    
+    <div class="tab-panel" id="tab-online">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;">
+          <div>
+            <h3 style="margin:0;">Online members</h3>
+            <p style="margin:0.35rem 0 0;color:var(--text-muted);font-size:0.9rem;">
+              Live via Realtime Presence + last seen within 2 minutes (heartbeat).
+            </p>
+          </div>
+          <div>
+            <strong id="online-count-label">0</strong> online
+            <button type="button" class="mini-btn good" id="refresh-online-btn" style="margin-left:0.5rem;">Refresh</button>
+          </div>
+        </div>
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Member</th>
+              <th>Path</th>
+              <th>Last seen</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody id="online-tbody">
+            <tr><td colspan="4" style="color:var(--text-muted);">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="tab-panel" id="tab-content">
       <p class="admin-hint">You can create new posts below. Editing, publishing/hiding, and deleting existing posts are Super Admin actions.</p>
       <div id="content-management"></div>
@@ -244,6 +276,7 @@
     import { mountNav, mountFooter } from '../assets/js/nav.js';
     import { requireAdmin } from '../assets/js/admin-guard.js';
     import '../assets/js/session-guard.js';
+    import { presenceListFromState } from '../assets/js/presence.js';
 
     mountNav('admin');
     mountFooter();
@@ -1141,6 +1174,92 @@ addUserForm.addEventListener('submit', async (e) => {
     loadContentManagement();
     loadSavingsGroups();
     loadElections();
-  </script>
+  
+  // ---- Online presence tab ----
+  async function loadOnlineMembers() {
+    const tbody = document.getElementById('online-tbody');
+    const countLabel = document.getElementById('online-count-label');
+    if (!tbody) return;
+
+    const byId = new Map();
+
+    // DB heartbeat (reliable)
+    const { data: rows, error } = await supabase.rpc('admin_online_members');
+    if (error) {
+      tbody.innerHTML = `<tr><td colspan="4" style="color:#9c2b2b;">${error.message}. Run sql/026_presence_online.sql</td></tr>`;
+      return;
+    }
+    (rows || []).forEach((r) => {
+      byId.set(r.id, {
+        id: r.id,
+        full_name: r.full_name,
+        email: r.email,
+        profile_photo_url: r.profile_photo_url,
+        path: r.last_seen_path || '—',
+        last_seen: r.last_seen_at,
+        source: 'heartbeat',
+      });
+    });
+
+    // Merge Realtime Presence if any client is on the channel
+    try {
+      const ch = supabase.channel('online-members');
+      await new Promise((resolve) => {
+        const t = setTimeout(resolve, 800);
+        ch.on('presence', { event: 'sync' }, () => {
+          const list = presenceListFromState(ch.presenceState());
+          list.forEach((p) => {
+            const id = p.user_id || p.presence_key;
+            if (!id) return;
+            const prev = byId.get(id) || {};
+            byId.set(id, {
+              id,
+              full_name: p.full_name || prev.full_name || 'Member',
+              email: prev.email || '',
+              profile_photo_url: p.profile_photo_url || prev.profile_photo_url,
+              path: p.path || prev.path || '—',
+              last_seen: p.online_at || prev.last_seen,
+              source: prev.source ? 'heartbeat+presence' : 'presence',
+            });
+          });
+          clearTimeout(t);
+          resolve();
+        }).subscribe();
+      });
+      setTimeout(() => { try { supabase.removeChannel(ch); } catch {} }, 2000);
+    } catch (e) {
+      console.warn('presence merge', e);
+    }
+
+    const list = [...byId.values()].sort((a, b) => String(b.last_seen || '').localeCompare(String(a.last_seen || '')));
+    if (countLabel) countLabel.textContent = String(list.length);
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="4" style="color:var(--text-muted);">No members online right now.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map((m) => {
+      const when = m.last_seen ? new Date(m.last_seen).toLocaleString() : '—';
+      const photo = m.profile_photo_url
+        ? `<img src="${m.profile_photo_url}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:0.4rem;" />`
+        : '';
+      return `<tr>
+        <td>${photo}<strong>${escapeHtml(m.full_name || 'Member')}</strong><br><span style="color:var(--text-muted);font-size:0.8rem;">${escapeHtml(m.email || '')}</span></td>
+        <td><code style="font-size:0.8rem;">${escapeHtml(m.path || '—')}</code></td>
+        <td>${when}</td>
+        <td>${escapeHtml(m.source)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.getElementById('refresh-online-btn')?.addEventListener('click', loadOnlineMembers);
+  document.querySelectorAll('.tab-btn[data-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.getAttribute('data-tab') === 'online') loadOnlineMembers();
+    });
+  });
+  // initial soft load
+  loadOnlineMembers().catch(() => {});
+
+</script>
 </body>
 </html>
