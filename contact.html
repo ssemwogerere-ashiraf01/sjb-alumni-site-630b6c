@@ -109,6 +109,13 @@
     <p><a href="about.html">About Us</a> · <a href="rules.html">Members’ Code</a> · <a href="reset-password.html">Reset password</a>
     · <a href="register.html">Become a member</a> · <a href="login.html">Sign in</a></p>
   </div>
+
+    <div class="contact-card" id="my-replies-card" style="display:none;grid-column:1/-1;">
+      <h3>Your messages &amp; admin replies</h3>
+      <p style="color:var(--text-muted);font-size:0.9rem;">When an admin replies, it appears here and is also emailed to you (if email delivery is configured).</p>
+      <div id="my-contact-replies"></div>
+    </div>
+
 </div>
 <div id="app-footer"></div>
 <script type="module">
@@ -197,6 +204,38 @@
     input.value = '';
     aiBox.scrollTop = aiBox.scrollHeight;
   });
+
+  async function loadMyContactMessages() {
+    const card = document.getElementById('my-replies-card');
+    const box = document.getElementById('my-contact-replies');
+    if (!card || !box) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('contact_messages')
+        .select('id, topic, message, status, admin_reply, replied_at, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error || !data?.length) return;
+      card.style.display = 'block';
+      box.innerHTML = data.map(m => `
+        <div style="border:1px solid var(--border);border-radius:8px;padding:0.85rem;margin-bottom:0.65rem;">
+          <div style="font-size:0.8rem;color:var(--text-muted);">${m.created_at ? new Date(m.created_at).toLocaleString() : ''} · ${m.topic || 'general'} · ${m.status}</div>
+          <div style="margin:0.4rem 0;white-space:pre-wrap;">${escapeHtml(m.message)}</div>
+          ${m.admin_reply ? `<div style="background:#eaf4ec;padding:0.65rem;border-radius:8px;margin-top:0.5rem;"><strong>Admin reply</strong>${m.replied_at ? ` · ${new Date(m.replied_at).toLocaleString()}` : ''}<div style="white-space:pre-wrap;margin-top:0.35rem;">${escapeHtml(m.admin_reply)}</div></div>` : '<p style="color:var(--text-muted);font-size:0.85rem;margin:0.35rem 0 0;">No admin reply yet.</p>'}
+        </div>
+      `).join('');
+    } catch { /* ignore */ }
+  }
+  function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s ?? '';
+    return d.innerHTML;
+  }
+  loadMyContactMessages();
+
 </script>
 </body>
 </html>

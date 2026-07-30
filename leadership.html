@@ -146,6 +146,7 @@
 
   const { data: currentLeaders, error: currentErr } = await supabase
     .from('leaders')
+    .is('group_id', null)
     .select('id, user_id, position, bio, term_start, term_end, display_order')
     .eq('is_current', true)
     .order('display_order');
@@ -168,6 +169,7 @@
   // -----------------------------------------------------------------------
   const { data: pastLeaders, error: pastErr } = await supabase
     .from('leaders')
+    .is('group_id', null)
     .select('id, user_id, position, bio, term_start, term_end, display_order')
     .eq('is_current', false)
     .order('term_start', { ascending: false })
