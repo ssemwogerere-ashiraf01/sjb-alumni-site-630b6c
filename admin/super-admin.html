@@ -69,7 +69,17 @@
   .member-name-cell { display: flex; align-items: center; gap: 0.65rem; }
   .photo-cell { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; min-width: 56px; }
   .photo-cell .mini-btn { padding: 0.2rem 0.45rem; font-size: 0.72rem; }
-</style>
+
+    .contact-msg { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; background: #fff; }
+    .contact-msg.new { border-left: 4px solid #d4af37; }
+    .contact-msg.read { border-left: 4px solid #94a3b8; }
+    .contact-msg.replied { border-left: 4px solid #16a34a; }
+    .contact-msg.archived { opacity: 0.7; }
+    .contact-msg-head { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; align-items: baseline; }
+    .contact-msg-meta { font-size: 0.8rem; color: var(--text-muted); }
+    .contact-msg-body { margin: 0.65rem 0; white-space: pre-wrap; line-height: 1.45; }
+
+  </style>
 </head>
 <body>
 <div id="app-nav"></div>
@@ -89,8 +99,10 @@
     <button class="tab-btn" data-tab="savings">Savings Groups</button>
     <button class="tab-btn" data-tab="elections">Elections</button>
     <button class="tab-btn" data-tab="leadership">Leadership</button>
+    <button class="tab-btn" data-tab="positions">Positions</button>
     <button class="tab-btn" data-tab="financials">Approvals &amp; Financials</button>
     <button class="tab-btn" data-tab="feedback">Feedback Forms</button>
+    <button class="tab-btn" data-tab="contact">Contact messages</button>
   </div>
 
   <!-- TAB: MEMBERS -->
@@ -189,8 +201,23 @@
       <p class="empty-note">Voting is annual and only runs when you create/activate an election. Closing an election can auto-promote winners. Here you can manually add, edit, retire, or delete current and past leaders at any time.</p>
 
       <form id="leader-add-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.65rem;align-items:end;margin-bottom:1.25rem;padding:1rem;background:#f8fafc;border:1px solid var(--border);border-radius:8px;">
-        <div class="form-group" style="margin:0;"><label>Member email *</label><input type="email" id="ldr-email" required placeholder="member@example.com" /></div>
-        <div class="form-group" style="margin:0;"><label>Position *</label><input type="text" id="ldr-position" required placeholder="Chairperson" /></div>
+        <div class="form-group" style="margin:0;"><label>Member *</label>
+          <select id="ldr-email" required><option value="">Loading members…</option></select>
+        </div>
+        <div class="form-group" style="margin:0;"><label>Position *</label>
+          <select id="ldr-position" required>
+            <option value="">Select…</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;"><label>Scope</label>
+          <select id="ldr-scope">
+            <option value="association">Association</option>
+            <option value="savings_group">Savings group</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;"><label>Savings group (if scope is group)</label>
+          <select id="ldr-group"><option value="">—</option></select>
+        </div>
         <div class="form-group" style="margin:0;"><label>Term start</label><input type="date" id="ldr-start" /></div>
         <div class="form-group" style="margin:0;"><label>Term end</label><input type="date" id="ldr-end" /></div>
         <div class="form-group" style="margin:0;"><label>Display order</label><input type="number" id="ldr-order" value="0" /></div>
@@ -227,6 +254,30 @@
   </div>
 
   <!-- TAB: FEEDBACK FORMS -->
+  
+  <div class="tab-panel" id="tab-positions">
+    <div class="card">
+      <h3 style="margin-top:0;">Leadership positions</h3>
+      <p class="empty-note">Association positions apply to the single alumni leadership body. Savings-group positions apply to every savings group’s own elected officers.</p>
+      <form id="position-add-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.65rem;align-items:end;margin-bottom:1rem;padding:1rem;background:#f8fafc;border:1px solid var(--border);border-radius:8px;">
+        <div class="form-group" style="margin:0;"><label>Name *</label><input id="pos-name" required placeholder="Chairperson" /></div>
+        <div class="form-group" style="margin:0;"><label>Scope *</label>
+          <select id="pos-scope" required>
+            <option value="association">Association (alumni)</option>
+            <option value="savings_group">Savings group</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;"><label>Order</label><input type="number" id="pos-order" value="0" /></div>
+        <div class="form-group" style="margin:0;grid-column:1/-1;"><label>Description</label><input id="pos-desc" /></div>
+        <button type="submit" class="mini-btn good">+ Add position</button>
+      </form>
+      <table>
+        <thead><tr><th>Name</th><th>Scope</th><th>Order</th><th>Active</th><th>Actions</th></tr></thead>
+        <tbody id="sa-positions-tbody"><tr><td colspan="5" class="empty-note">Open tab to load…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="tab-panel" id="tab-feedback">
     <div class="card">
       <h3 style="margin-top:0;">Feedback Forms</h3>
@@ -235,6 +286,29 @@
       <a href="./feedback.html" class="mini-btn good" style="text-decoration:none; display:inline-block;">Open Feedback Forms →</a>
     </div>
   </div>
+
+  <div class="tab-panel" id="tab-contact">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;">
+        <div>
+          <h3 style="margin:0;">Contact Us messages</h3>
+          <p class="empty-note" style="margin:0.35rem 0 0;">From the public Contact form. Mark read / replied / archive, or reply by email.</p>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <select id="sa-contact-filter" style="padding:0.4rem 0.6rem;border:1px solid var(--border);border-radius:4px;">
+            <option value="all">All</option>
+            <option value="new" selected>New</option>
+            <option value="read">Read</option>
+            <option value="replied">Replied</option>
+            <option value="archived">Archived</option>
+          </select>
+          <button type="button" class="mini-btn good" id="sa-refresh-contact">Refresh</button>
+        </div>
+      </div>
+      <div id="sa-contact-list"><p class="empty-note">Open this tab to load…</p></div>
+    </div>
+  </div>
+
 </main>
 
 <div id="app-footer"></div>
@@ -258,6 +332,8 @@
       btn.classList.add('active');
       document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
       if (btn.dataset.tab === 'leadership') loadLeadershipTab();
+      if (btn.dataset.tab === 'positions') loadPositionsTab();
+      if (btn.dataset.tab === 'contact') loadSaContactMessages();
     });
   });
 
@@ -320,6 +396,8 @@
   let profileById = {};
   let savingsGroups = [];
   let elections = [];
+  let leadershipPositions = [];
+  let approvedMembers = [];
   let candidatesByElection = {};
 
   // Must be declared before any loader runs (top-level await below).
@@ -865,9 +943,53 @@
   // ELECTIONS — status changes, candidate approval, delete, close +
   // auto-promote winners.
   // =====================================================================
+
+  async function loadPositionOptions(scope) {
+    const { data } = await supabase
+      .from('leadership_positions')
+      .select('id, name, scope, display_order')
+      .eq('is_active', true)
+      .eq('scope', scope)
+      .order('display_order');
+    return data || [];
+  }
+
+  async function loadApprovedMembersList() {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .eq('status', 'approved')
+      .order('full_name')
+      .limit(500);
+    return data || [];
+  }
+
+  function memberOptionsHtml(selectedEmail = '') {
+    return approvedMembers.map(m => {
+      const em = (m.email || '').toLowerCase();
+      const sel = em === (selectedEmail || '').toLowerCase() ? ' selected' : '';
+      return `<option value="${escapeHtml(em)}"${sel}>${escapeHtml(m.full_name || em)} — ${escapeHtml(em)}</option>`;
+    }).join('');
+  }
+
+  function positionOptionsHtml(scope, selected = '') {
+    return leadershipPositions
+      .filter(p => p.scope === scope)
+      .map(p => {
+        const sel = p.name === selected ? ' selected' : '';
+        return `<option value="${escapeHtml(p.name)}"${sel}>${escapeHtml(p.name)}</option>`;
+      }).join('');
+  }
+
   async function loadElectionsTab() {
     const listEl = document.getElementById('sa-elections-list');
     listEl.innerHTML = `<p class="empty-note">Loading elections...</p>`;
+
+    approvedMembers = await loadApprovedMembersList();
+    leadershipPositions = [
+      ...(await loadPositionOptions('association')),
+      ...(await loadPositionOptions('savings_group')),
+    ];
 
     const { data, error } = await supabase
       .from('elections')
@@ -994,7 +1116,7 @@
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
           <div>
             <h3 style="margin:0 0 0.25rem;">
-              ${escapeHtml(e.title)}
+              ${escapeHtml(e.title)}${e.group_id ? ' <span class="pill pill-pending">Savings group</span>' : ' <span class="pill pill-member">Association</span>'}
               <span class="pill ${statusPillClass}" style="margin-left:0.4rem; vertical-align:middle;">${escapeHtml(e.status)}</span>
             </h3>
             <p style="color:var(--text-muted); font-size:0.85rem; margin:0;">
@@ -1039,9 +1161,21 @@
           </table>
         </div>
 
-        <form data-add-candidate="${e.id}" style="margin-top:1rem; display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:0.6rem; align-items:end;">
-          <div class="form-group" style="margin-bottom:0;"><label>Candidate email</label><input type="email" name="email" required /></div>
-          <div class="form-group" style="margin-bottom:0;"><label>Position</label><input type="text" name="position" required /></div>
+        <form data-add-candidate="${e.id}" data-election-scope="${e.group_id ? 'savings_group' : 'association'}" style="margin-top:1rem; display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.6rem; align-items:end;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Member</label>
+            <select name="email" required>
+              <option value="">Select member…</option>
+              ${memberOptionsHtml()}
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Position</label>
+            <select name="position" required>
+              <option value="">Select position…</option>
+              ${positionOptionsHtml(e.group_id ? 'savings_group' : 'association')}
+            </select>
+          </div>
           <div class="form-group" style="margin-bottom:0;"><label>Manifesto</label><input type="text" name="manifesto" /></div>
           <button type="submit" class="mini-btn good">+ Add Candidate</button>
         </form>
@@ -1111,10 +1245,91 @@
   }
 
 
+
+  async function loadPositionsTab() {
+    const tbody = document.getElementById('sa-positions-tbody');
+    if (!tbody) return;
+    const { data, error } = await supabase.from('leadership_positions').select('*').order('scope').order('display_order');
+    if (error) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-note">${escapeHtml(error.message)} — run sql/029</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = (data || []).map(p => `
+      <tr>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${p.scope === 'association' ? 'Association' : 'Savings group'}</td>
+        <td>${p.display_order}</td>
+        <td>${p.is_active ? 'Yes' : 'No'}</td>
+        <td>
+          <button type="button" class="mini-btn" data-pos-toggle="${p.id}" data-active="${p.is_active}">${p.is_active ? 'Deactivate' : 'Activate'}</button>
+          <button type="button" class="mini-btn bad" data-pos-del="${p.id}">Delete</button>
+        </td>
+      </tr>
+    `).join('') || `<tr><td colspan="5" class="empty-note">No positions</td></tr>`;
+  }
+
+  document.getElementById('position-add-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const row = {
+      name: document.getElementById('pos-name').value.trim(),
+      scope: document.getElementById('pos-scope').value,
+      display_order: Number(document.getElementById('pos-order').value) || 0,
+      description: document.getElementById('pos-desc').value.trim() || null,
+    };
+    const { error } = await supabase.from('leadership_positions').insert(row);
+    if (error) return flash(error.message + ' — run sql/029', 'error');
+    flash('Position added.');
+    e.target.reset();
+    return loadPositionsTab();
+  });
+
+  document.getElementById('sa-positions-tbody')?.addEventListener('click', async (ev) => {
+    const tog = ev.target.closest('[data-pos-toggle]');
+    if (tog) {
+      const { error } = await supabase.from('leadership_positions').update({ is_active: tog.dataset.active !== 'true' }).eq('id', tog.dataset.posToggle);
+      if (error) return flash(error.message, 'error');
+      return loadPositionsTab();
+    }
+    const del = ev.target.closest('[data-pos-del]');
+    if (del) {
+      if (!confirm('Delete this position?')) return;
+      const { error } = await supabase.from('leadership_positions').delete().eq('id', del.dataset.posDel);
+      if (error) return flash(error.message, 'error');
+      return loadPositionsTab();
+    }
+  });
+
   // =====================================================================
   // LEADERSHIP — full admin control of current + past leaders
   // =====================================================================
+  async function fillLeaderFormSelects() {
+    const emailSel = document.getElementById('ldr-email');
+    if (emailSel && emailSel.tagName === 'SELECT') {
+      const members = await loadApprovedMembersList();
+      emailSel.innerHTML = '<option value="">Select member…</option>' + members.map(m =>
+        `<option value="${escapeHtml((m.email || '').toLowerCase())}">${escapeHtml(m.full_name || '')} — ${escapeHtml(m.email || '')}</option>`
+      ).join('');
+    }
+    const posSel = document.getElementById('ldr-position');
+    const groupSel = document.getElementById('ldr-group');
+    const scope = document.getElementById('ldr-scope')?.value || 'association';
+    if (posSel) {
+      const positions = await loadPositionOptions(scope);
+      posSel.innerHTML = '<option value="">Select…</option>' + positions.map(p =>
+        `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`
+      ).join('');
+    }
+    if (groupSel) {
+      const { data: groups } = await supabase.from('savings_groups').select('id, name').eq('is_active', true).order('name');
+      groupSel.innerHTML = '<option value="">—</option>' + (groups || []).map(g =>
+        `<option value="${g.id}">${escapeHtml(g.name)}</option>`
+      ).join('');
+    }
+  }
+  document.getElementById('ldr-scope')?.addEventListener('change', fillLeaderFormSelects);
+
   async function loadLeadershipTab() {
+    await fillLeaderFormSelects();
     const tbody = document.getElementById('sa-leaders-tbody');
     if (!tbody) return;
     tbody.innerHTML = `<tr><td colspan="6" class="empty-note">Loading…</td></tr>`;
@@ -1179,6 +1394,8 @@
         .eq('position', position).eq('is_current', true);
     }
 
+    const scope = document.getElementById('ldr-scope')?.value || 'association';
+    const groupId = document.getElementById('ldr-group')?.value || null;
     const row = {
       user_id: profile.id,
       position,
@@ -1187,7 +1404,9 @@
       is_current: isCurrent,
       bio: document.getElementById('ldr-bio').value.trim() || null,
       display_order: Number(document.getElementById('ldr-order').value) || 0,
+      group_id: scope === 'savings_group' ? (groupId || null) : null,
     };
+    if (scope === 'savings_group' && !groupId) return flash('Select a savings group for group leadership.', 'error');
     const { error } = await supabase.from('leaders').insert(row);
     if (error) return flash(error.message, 'error');
     flash(`Added ${profile.full_name} as ${position}.`);
@@ -1395,6 +1614,123 @@
       <div class="stat-box"><strong>${active}</strong><span>Active Forms</span></div>
     `;
   }
+
+
+  async function loadSaContactMessages() {
+    const list = document.getElementById('sa-contact-list');
+    if (!list) return;
+    list.innerHTML = `<p class="empty-note">Loading…</p>`;
+    const filter = document.getElementById('sa-contact-filter')?.value || 'all';
+    let q = supabase.from('contact_messages').select('*').order('created_at', { ascending: false }).limit(150);
+    if (filter && filter !== 'all') q = q.eq('status', filter);
+    const { data, error } = await q;
+    if (error) {
+      list.innerHTML = `<p class="empty-note" style="color:#9c2b2b;">${escapeHtml(error.message)}. Run sql/021 if the table is missing.</p>`;
+      return;
+    }
+    if (!data?.length) {
+      list.innerHTML = `<p class="empty-note">No messages for this filter.</p>`;
+      return;
+    }
+    list.innerHTML = data.map(m => {
+      const when = m.created_at ? new Date(m.created_at).toLocaleString() : '';
+      const mail = `mailto:${encodeURIComponent(m.email)}?subject=${encodeURIComponent('Re: SJB Association — ' + (m.topic || 'your message'))}`;
+      return `<div class="contact-msg ${escapeHtml(m.status || 'new')}">
+        <div class="contact-msg-head">
+          <div><strong>${escapeHtml(m.name)}</strong> · <a href="${mail}">${escapeHtml(m.email)}</a>${m.phone ? ' · ' + escapeHtml(m.phone) : ''}</div>
+          <span class="contact-msg-meta">${when} · <strong>${escapeHtml(m.status)}</strong>${m.topic ? ' · ' + escapeHtml(m.topic) : ''}</span>
+        </div>
+        <div class="contact-msg-body">${escapeHtml(m.message)}</div>
+        <div style="display:flex;gap:0.35rem;flex-wrap:wrap;">
+          <button type="button" class="mini-btn" data-cm-status="read" data-id="${m.id}">Mark read</button>
+          <button type="button" class="mini-btn good" data-cm-status="replied" data-id="${m.id}">Mark replied</button>
+          <button type="button" class="mini-btn" data-cm-status="archived" data-id="${m.id}">Archive</button>
+          <button type="button" class="mini-btn bad" data-cm-del="${m.id}">Delete</button>
+          ${m.admin_reply ? `<div style="margin:0.5rem 0;padding:0.65rem;background:#eaf4ec;border-radius:8px;font-size:0.9rem;"><strong>Admin reply</strong>${m.replied_at ? ` · ${new Date(m.replied_at).toLocaleString()}` : ''}<div style="white-space:pre-wrap;margin-top:0.35rem;">${escapeHtml(m.admin_reply)}</div></div>` : ''}
+            <div class="contact-reply-box" style="display:none;margin:0.5rem 0;" data-reply-box="${m.id}">
+              <textarea data-reply-text="${m.id}" rows="3" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;" placeholder="Write a reply to the sender…"></textarea>
+              <div style="margin-top:0.35rem;display:flex;gap:0.35rem;">
+                <button type="button" class="mini-btn good" data-cm-reply-send="${m.id}">Send reply</button>
+                <button type="button" class="mini-btn" data-cm-reply-cancel="${m.id}">Cancel</button>
+              </div>
+            </div>
+            <button type="button" class="mini-btn good" data-cm-reply-open="${m.id}">Reply</button>
+            <a class="mini-btn good" href="${mail}" style="text-decoration:none;">Email client</a>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('sa-refresh-contact')?.addEventListener('click', loadSaContactMessages);
+  document.getElementById('sa-contact-filter')?.addEventListener('change', loadSaContactMessages);
+  document.getElementById('sa-contact-list')?.addEventListener('click', async (ev) => {
+    const del = ev.target.closest('[data-cm-del]');
+    if (del) {
+      if (!confirm('Delete this contact message permanently?')) return;
+      const { error } = await supabase.from('contact_messages').delete().eq('id', del.dataset.cmDel);
+      if (error) return flash(error.message + ' (add delete policy if needed)', 'error');
+      flash('Message deleted.');
+      return loadSaContactMessages();
+    }
+    
+      const openReply = ev.target.closest('[data-cm-reply-open]');
+      if (openReply) {
+        const box = document.querySelector(`[data-reply-box="${openReply.dataset.cmReplyOpen}"]`);
+        if (box) box.style.display = box.style.display === 'none' ? 'block' : 'none';
+        return;
+      }
+      const cancelReply = ev.target.closest('[data-cm-reply-cancel]');
+      if (cancelReply) {
+        const box = document.querySelector(`[data-reply-box="${cancelReply.dataset.cmReplyCancel}"]`);
+        if (box) box.style.display = 'none';
+        return;
+      }
+      const sendReply = ev.target.closest('[data-cm-reply-send]');
+      if (sendReply) {
+        const id = sendReply.dataset.cmReplySend;
+        const ta = document.querySelector(`[data-reply-text="${id}"]`);
+        const text = (ta?.value || '').trim();
+        if (!text) return flash('Write a reply first.', 'error');
+        const { data: { user: u } } = await supabase.auth.getUser();
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess?.session?.access_token;
+        const { SUPABASE_URL: _url, SUPABASE_ANON_KEY: _key } = await import('../assets/js/supabase-client.js');
+        let emailed = false;
+        try {
+          const res2 = await fetch(`${_url}/functions/v1/contact-reply`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+              apikey: _key,
+            },
+            body: JSON.stringify({ message_id: id, reply: text }),
+          });
+          const result = await res2.json().catch(() => ({}));
+          if (!res2.ok) throw new Error(result.error || res2.statusText);
+          emailed = !!result.email_sent;
+          flash(result.message || (emailed ? 'Reply emailed to sender.' : 'Reply saved.'));
+        } catch (err) {
+          const { error } = await supabase.from('contact_messages').update({
+            admin_reply: text,
+            replied_at: new Date().toISOString(),
+            replied_by: u?.id || null,
+            status: 'replied',
+          }).eq('id', id);
+          if (error) return flash(error.message + ' — run sql/031 and deploy contact-reply', 'error');
+          flash('Reply saved on the site. Email needs contact-reply function + RESEND secrets. (' + (err.message || '') + ')');
+        }
+        loadSaContactMessages();
+        return;
+      }
+
+      const btn = ev.target.closest('[data-cm-status]');
+    if (!btn) return;
+    const { error } = await supabase.from('contact_messages').update({ status: btn.dataset.cmStatus }).eq('id', btn.dataset.id);
+    if (error) return flash(error.message, 'error');
+    flash('Status updated.');
+    loadSaContactMessages();
+  });
 
 </script>
 </body>

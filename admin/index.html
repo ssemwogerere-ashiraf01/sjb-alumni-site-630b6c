@@ -49,6 +49,16 @@
       width: 36px; height: 36px; border-radius: 50%; background: var(--forest); color: #fff;
       font-weight: 700; font-size: 0.8rem; display: flex; align-items: center; justify-content: center;
     }
+  
+    .contact-msg { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; background: #fff; }
+    .contact-msg.new { border-left: 4px solid #d4af37; }
+    .contact-msg.read { border-left: 4px solid #94a3b8; }
+    .contact-msg.replied { border-left: 4px solid #16a34a; }
+    .contact-msg.archived { opacity: 0.7; }
+    .contact-msg-head { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; align-items: baseline; }
+    .contact-msg-meta { font-size: 0.8rem; color: var(--text-muted); }
+    .contact-msg-body { margin: 0.65rem 0; white-space: pre-wrap; line-height: 1.45; }
+
   </style>
 </head>
 <body>
@@ -152,6 +162,7 @@
       <button class="tab-btn" data-tab="content">Content Management</button>
       <button class="tab-btn" data-tab="savings">Savings Groups</button>
       <button class="tab-btn" data-tab="elections">Elections</button>
+      <button class="tab-btn" data-tab="contact">Contact messages</button>
       <a href="./super-admin.html" class="tab-btn" style="text-decoration:none; display:inline-flex; align-items:center;" title="Approving/rejecting savings activations and withdrawals is a Super Admin task">Approvals & Financials ↗</a>
       <a href="feedback.html" class="tab-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Feedback Forms ↗</a>
     </div>
@@ -255,15 +266,42 @@
           <button class="mini-btn good" id="new-election-btn">+ New Election</button>
         </div>
         <div id="new-election-form" style="display:none; background:#f8fafc; padding:1rem; border-radius:var(--radius); margin-bottom:1rem; border:1px solid var(--border);">
+          <p style="font-size:0.85rem;color:var(--text-muted);margin:0 0 0.75rem;">Leave group empty for <strong>association (alumni) leadership</strong>. Pick a savings group to run a <strong>group leadership</strong> election for that group only.</p>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.75rem;">
             <div class="form-group"><label>Title</label><input type="text" id="ne-title" required /></div>
             <div class="form-group"><label>Start Date</label><input type="datetime-local" id="ne-start" required /></div>
             <div class="form-group"><label>End Date</label><input type="datetime-local" id="ne-end" required /></div>
+            <div class="form-group"><label>Scope</label>
+              <select id="ne-group"><option value="">Association leadership</option></select>
+            </div>
             <div class="form-group" style="grid-column:1/-1;"><label>Description</label><input type="text" id="ne-desc" /></div>
           </div>
           <button class="mini-btn good" id="create-election-btn" style="margin-top:0.5rem;">Create Election</button>
         </div>
         <div id="elections-list"></div>
+      </div>
+    </div>
+
+
+    <div class="tab-panel" id="tab-contact">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;">
+          <div>
+            <h3 style="margin:0;">Contact Us messages</h3>
+            <p style="margin:0.35rem 0 0;color:var(--text-muted);font-size:0.9rem;">Messages submitted from the public Contact page.</p>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <select id="contact-filter" style="padding:0.4rem 0.6rem;border:1px solid var(--border);border-radius:4px;">
+              <option value="all">All statuses</option>
+              <option value="new" selected>New</option>
+              <option value="read">Read</option>
+              <option value="replied">Replied</option>
+              <option value="archived">Archived</option>
+            </select>
+            <button type="button" class="mini-btn good" id="refresh-contact-btn">Refresh</button>
+          </div>
+        </div>
+        <div id="contact-messages-list"><p style="color:var(--text-muted);">Open this tab to load…</p></div>
       </div>
     </div>
 
@@ -402,10 +440,13 @@
     // ---------- Tabs ----------
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (!btn.dataset.tab) return;
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
         btn.classList.add('active');
-        document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+        const panel = document.getElementById(`tab-${btn.dataset.tab}`);
+        if (panel) panel.classList.add('active');
+        if (btn.dataset.tab === 'contact') loadContactMessages();
       });
     });
 
@@ -1058,28 +1099,41 @@
       const { data: elections } = await supabase.from('elections').select('*').order('start_date', { ascending: false });
       document.getElementById('elections-list').innerHTML = (elections || []).map(e => `
         <div class="card">
-          <h3>${escapeHtml(e.title)} <span class="pill pill-${e.status === 'closed' ? 'rejected' : 'active'}">${e.status}</span></h3>
+          <h3>${escapeHtml(e.title)} <span class="pill pill-${e.status === 'closed' ? 'rejected' : 'active'}">${e.status}</span>
+            ${e.group_id ? '<span class="pill pill-pending">Savings group</span>' : '<span class="pill pill-member">Association</span>'}
+          </h3>
           <p style="color:var(--text-muted); font-size:0.85rem;">${new Date(e.start_date).toLocaleString()} – ${new Date(e.end_date).toLocaleString()}</p>
           <p style="color:var(--text-muted); font-size:0.8rem;">Editing dates/status, candidate approval, and closing this election are Super Admin actions.</p>
         </div>
       `).join('') || `<p style="text-align:center;color:var(--text-muted);">No elections scheduled.</p>`;
     }
 
-    document.getElementById('new-election-btn').addEventListener('click', () => {
+    document.getElementById('new-election-btn').addEventListener('click', async () => {
       const form = document.getElementById('new-election-form');
-      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      const show = form.style.display === 'none';
+      form.style.display = show ? 'block' : 'none';
+      if (show) {
+        const sel = document.getElementById('ne-group');
+        if (sel) {
+          const { data: groups } = await supabase.from('savings_groups').select('id, name').eq('is_active', true).order('name');
+          sel.innerHTML = '<option value="">Association leadership</option>' +
+            (groups || []).map(g => `<option value="${g.id}">${escapeHtml(g.name)} (savings group)</option>`).join('');
+        }
+      }
     });
     document.getElementById('create-election-btn').addEventListener('click', async () => {
       const title = document.getElementById('ne-title').value.trim();
       const start = document.getElementById('ne-start').value;
       const end = document.getElementById('ne-end').value;
       if (!title || !start || !end) return flash('Title, start, and end date are required.', 'error');
+      const groupVal = document.getElementById('ne-group')?.value || '';
       const payload = {
         title,
         start_date: new Date(start).toISOString(),
         end_date: new Date(end).toISOString(),
         description: document.getElementById('ne-desc').value.trim() || null,
         created_by: admin.id,
+        group_id: groupVal || null,
       };
       const { error } = await supabase.from('elections').insert(payload);
       if (error) return flash(error.message, 'error');
@@ -1259,6 +1313,116 @@ addUserForm.addEventListener('submit', async (e) => {
   });
   // initial soft load
   loadOnlineMembers().catch(() => {});
+
+
+    async function loadContactMessages() {
+      const list = document.getElementById('contact-messages-list');
+      if (!list) return;
+      list.innerHTML = '<p style="color:var(--text-muted);">Loading…</p>';
+      const filter = document.getElementById('contact-filter')?.value || 'all';
+      let q = supabase.from('contact_messages').select('*').order('created_at', { ascending: false }).limit(100);
+      if (filter && filter !== 'all') q = q.eq('status', filter);
+      const { data, error } = await q;
+      if (error) {
+        list.innerHTML = `<p style="color:#9c2b2b;">${escapeHtml(error.message)}. Ensure sql/021 was run (contact_messages table).</p>`;
+        return;
+      }
+      if (!data?.length) {
+        list.innerHTML = '<p style="color:var(--text-muted);">No contact messages for this filter.</p>';
+        return;
+      }
+      list.innerHTML = data.map(m => {
+        const when = m.created_at ? new Date(m.created_at).toLocaleString() : '';
+        const mail = `mailto:${encodeURIComponent(m.email)}?subject=${encodeURIComponent('Re: SJB Association — ' + (m.topic || 'your message'))}`;
+        return `<div class="contact-msg ${escapeHtml(m.status || 'new')}" data-id="${m.id}">
+          <div class="contact-msg-head">
+            <div>
+              <strong>${escapeHtml(m.name)}</strong>
+              · <a href="${mail}">${escapeHtml(m.email)}</a>
+              ${m.phone ? ` · ${escapeHtml(m.phone)}` : ''}
+            </div>
+            <span class="contact-msg-meta">${when} · <strong>${escapeHtml(m.status)}</strong>${m.topic ? ' · ' + escapeHtml(m.topic) : ''}</span>
+          </div>
+          <div class="contact-msg-body">${escapeHtml(m.message)}</div>
+          <div style="display:flex;gap:0.35rem;flex-wrap:wrap;">
+            <button type="button" class="mini-btn" data-cm-status="read" data-id="${m.id}">Mark read</button>
+            <button type="button" class="mini-btn good" data-cm-status="replied" data-id="${m.id}">Mark replied</button>
+            <button type="button" class="mini-btn" data-cm-status="archived" data-id="${m.id}">Archive</button>
+            ${m.admin_reply ? `<div style="margin:0.5rem 0;padding:0.65rem;background:#eaf4ec;border-radius:8px;font-size:0.9rem;"><strong>Admin reply</strong>${m.replied_at ? ` · ${new Date(m.replied_at).toLocaleString()}` : ''}<div style="white-space:pre-wrap;margin-top:0.35rem;">${escapeHtml(m.admin_reply)}</div></div>` : ''}
+            <div class="contact-reply-box" style="display:none;margin:0.5rem 0;" data-reply-box="${m.id}">
+              <textarea data-reply-text="${m.id}" rows="3" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;" placeholder="Write a reply to the sender…"></textarea>
+              <div style="margin-top:0.35rem;display:flex;gap:0.35rem;">
+                <button type="button" class="mini-btn good" data-cm-reply-send="${m.id}">Send reply</button>
+                <button type="button" class="mini-btn" data-cm-reply-cancel="${m.id}">Cancel</button>
+              </div>
+            </div>
+            <button type="button" class="mini-btn good" data-cm-reply-open="${m.id}">Reply</button>
+            <a class="mini-btn good" href="${mail}" style="text-decoration:none;">Email client</a>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    document.getElementById('refresh-contact-btn')?.addEventListener('click', loadContactMessages);
+    document.getElementById('contact-filter')?.addEventListener('change', loadContactMessages);
+    document.getElementById('contact-messages-list')?.addEventListener('click', async (ev) => {
+      const openReply = ev.target.closest('[data-cm-reply-open]');
+      if (openReply) {
+        const box = document.querySelector(`[data-reply-box="${openReply.dataset.cmReplyOpen}"]`);
+        if (box) box.style.display = box.style.display === 'none' ? 'block' : 'none';
+        return;
+      }
+      const cancelReply = ev.target.closest('[data-cm-reply-cancel]');
+      if (cancelReply) {
+        const box = document.querySelector(`[data-reply-box="${cancelReply.dataset.cmReplyCancel}"]`);
+        if (box) box.style.display = 'none';
+        return;
+      }
+      const sendReply = ev.target.closest('[data-cm-reply-send]');
+      if (sendReply) {
+        const id = sendReply.dataset.cmReplySend;
+        const ta = document.querySelector(`[data-reply-text="${id}"]`);
+        const text = (ta?.value || '').trim();
+        if (!text) return flash('Write a reply first.', 'error');
+        const { data: { user: u } } = await supabase.auth.getUser();
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess?.session?.access_token;
+        const { SUPABASE_URL: _url, SUPABASE_ANON_KEY: _key } = await import('../assets/js/supabase-client.js');
+        let emailed = false;
+        try {
+          const res2 = await fetch(`${_url}/functions/v1/contact-reply`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+              apikey: _key,
+            },
+            body: JSON.stringify({ message_id: id, reply: text }),
+          });
+          const result = await res2.json().catch(() => ({}));
+          if (!res2.ok) throw new Error(result.error || res2.statusText);
+          emailed = !!result.email_sent;
+          flash(result.message || (emailed ? 'Reply emailed to sender.' : 'Reply saved.'));
+        } catch (err) {
+          const { error } = await supabase.from('contact_messages').update({
+            admin_reply: text,
+            replied_at: new Date().toISOString(),
+            replied_by: u?.id || null,
+            status: 'replied',
+          }).eq('id', id);
+          if (error) return flash(error.message + ' — run sql/031 and deploy contact-reply', 'error');
+          flash('Reply saved on the site. Email needs contact-reply function + RESEND secrets. (' + (err.message || '') + ')');
+        }
+        loadContactMessages();
+        return;
+      }
+      const btn = ev.target.closest('[data-cm-status]');
+      if (!btn) return;
+      const { error } = await supabase.from('contact_messages').update({ status: btn.dataset.cmStatus }).eq('id', btn.dataset.id);
+      if (error) return flash(error.message, 'error');
+      flash('Status updated.');
+      loadContactMessages();
+    });
 
 </script>
 </body>
